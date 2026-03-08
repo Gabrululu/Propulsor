@@ -3,11 +3,9 @@ import DashboardLayout from "@/components/DashboardLayout";
 import SplitBar from "@/components/SplitBar";
 import TxRow from "@/components/TxRow";
 import { useStellarBalance } from "@/hooks/useStellarBalance";
-import { isSimulationMode } from "@/lib/stellar/client";
-import { horizonServer } from "@/lib/stellar/client";
+import { isSimulationMode, getHorizonServer } from "@/lib/stellar/client";
 import { toast } from "@/hooks/use-toast";
 
-// For demo: use a mock public key (in real app, comes from auth context)
 const DEMO_PUBLIC_KEY = null; // Set to real key after onboarding
 
 const mockVaults = [
@@ -28,57 +26,54 @@ const Dashboard = () => {
   const { balance } = useStellarBalance(DEMO_PUBLIC_KEY);
   const streamRef = useRef<(() => void) | null>(null);
 
-  // Real-time payment streaming
   useEffect(() => {
     if (!DEMO_PUBLIC_KEY) return;
 
-    try {
-      const closeStream = horizonServer
-        .payments()
-        .forAccount(DEMO_PUBLIC_KEY)
-        .stream({
-          onmessage: (payment: any) => {
-            if (payment.type === "payment" && payment.to === DEMO_PUBLIC_KEY) {
-              toast({
-                title: "💜 Pago recibido",
-                description: `+${parseFloat(payment.amount).toFixed(2)} ${payment.asset_code || "XLM"}`,
-              });
-            }
-          },
-        });
-      streamRef.current = closeStream as unknown as () => void;
-    } catch {
-      // Streaming not available
-    }
+    const setupStream = async () => {
+      try {
+        const server = await getHorizonServer();
+        const closeStream = server
+          .payments()
+          .forAccount(DEMO_PUBLIC_KEY)
+          .stream({
+            onmessage: (payment: any) => {
+              if (payment.type === "payment" && payment.to === DEMO_PUBLIC_KEY) {
+                toast({
+                  title: "💜 Pago recibido",
+                  description: `+${parseFloat(payment.amount).toFixed(2)} ${payment.asset_code || "XLM"}`,
+                });
+              }
+            },
+          });
+        streamRef.current = closeStream as unknown as () => void;
+      } catch {}
+    };
+
+    setupStream();
 
     return () => {
       if (streamRef.current) streamRef.current();
     };
   }, []);
 
-  // Use Stellar balance if available, otherwise mock
   const totalBalance = DEMO_PUBLIC_KEY ? balance.usdc : mockVaults.reduce((s, v) => s + v.balance, 0);
 
   return (
     <DashboardLayout>
       <div className="p-6 md:p-10 max-w-5xl pb-24 md:pb-10">
-        {/* Top bar */}
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8">
           <div>
             <h1 className="text-2xl font-bold text-foreground">Hola, María 👋</h1>
             <p className="text-body-muted text-xs font-mono mt-1">8 de marzo, 2026</p>
           </div>
-          {/* Network status is now in DashboardLayout */}
         </div>
 
-        {/* Simulation badge */}
         {isSimulationMode && (
           <div className="mb-4 inline-flex items-center gap-1.5 font-mono text-[0.6rem] px-2.5 py-1 rounded-sm border border-pink-visible bg-card-dark text-pink-soft">
             ⚡ TESTNET SIMULATION — Contratos aún no desplegados
           </div>
         )}
 
-        {/* Balance card */}
         <div className="bg-card-dark border border-pink-subtle rounded-sm p-6 mb-8">
           <span className="text-body-muted text-xs font-mono uppercase tracking-widest">Balance total</span>
           <div className="mt-2 flex items-baseline gap-3">
@@ -91,7 +86,6 @@ const Dashboard = () => {
           {DEMO_PUBLIC_KEY && balance.xlm > 0 && (
             <p className="text-dimmed text-xs font-mono mt-0.5">{balance.xlm.toFixed(4)} XLM</p>
           )}
-
           <div className="mt-6">
             <SplitBar
               segments={mockVaults.map((v) => ({ percentage: v.pct, color: v.color, label: v.name }))}
@@ -100,7 +94,6 @@ const Dashboard = () => {
           </div>
         </div>
 
-        {/* Vault mini-cards */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
           {mockVaults.map((v, i) => (
             <div
@@ -120,7 +113,6 @@ const Dashboard = () => {
           ))}
         </div>
 
-        {/* Recent activity */}
         <div>
           <h2 className="text-lg font-bold text-foreground mb-4">ACTIVIDAD RECIENTE</h2>
           <div className="bg-card-dark rounded-sm border border-pink-subtle overflow-hidden">

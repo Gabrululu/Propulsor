@@ -1,6 +1,6 @@
 import * as StellarSdk from "@stellar/stellar-sdk";
 import {
-  horizonServer,
+  getHorizonServer,
   FRIENDBOT_URL,
   USDC_ASSET_CODE,
   USDC_ISSUER,
@@ -36,7 +36,8 @@ export interface AccountBalances {
 
 export async function getAccountBalance(publicKey: string): Promise<AccountBalances> {
   try {
-    const account = await horizonServer.loadAccount(publicKey);
+    const server = await getHorizonServer();
+    const account = await server.loadAccount(publicKey);
     let xlm = 0;
     let usdc = 0;
 

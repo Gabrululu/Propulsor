@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { horizonServer } from "@/lib/stellar/client";
+import { getHorizonServer } from "@/lib/stellar/client";
 
 export type NetworkState = "connected" | "reconnecting" | "offline";
 
@@ -9,11 +9,8 @@ export function useNetworkStatus() {
 
   const checkConnection = useCallback(async () => {
     try {
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 3000);
-
-      await horizonServer.ledgers().limit(1).call();
-      clearTimeout(timeout);
+      const server = await getHorizonServer();
+      await server.ledgers().limit(1).call();
       setStatus("connected");
     } catch {
       setStatus((prev) => (prev === "connected" ? "reconnecting" : "offline"));

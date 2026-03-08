@@ -1,6 +1,6 @@
 import * as StellarSdk from "@stellar/stellar-sdk";
 import {
-  sorobanServer,
+  getSorobanServer,
   NETWORK_PASSPHRASE,
   SPLIT_CONTRACT_ID,
   VAULT_CONTRACT_ID,
@@ -54,7 +54,6 @@ export async function executeSplit(
     (rule) => Math.round((rule.percentage / 100) * incomeAmount * 100) / 100
   );
 
-  // Simulation mode
   if (isSimulationMode) {
     await mockDelay();
     return {
@@ -65,10 +64,12 @@ export async function executeSplit(
     };
   }
 
-  // Real Soroban call
   try {
+    const server = await getSorobanServer();
+    if (!server) throw new Error("Soroban server not available");
+
     const keypair = StellarSdk.Keypair.fromSecret(secretKey);
-    const account = await sorobanServer.getAccount(keypair.publicKey());
+    const account = await server.getAccount(keypair.publicKey());
 
     const contract = new StellarSdk.Contract(SPLIT_CONTRACT_ID);
     const tx = new StellarSdk.TransactionBuilder(account, {
@@ -88,9 +89,9 @@ export async function executeSplit(
       .setTimeout(30)
       .build();
 
-    const prepared = await sorobanServer.prepareTransaction(tx);
+    const prepared = await server.prepareTransaction(tx);
     (prepared as StellarSdk.Transaction).sign(keypair);
-    const response = await sorobanServer.sendTransaction(prepared);
+    const response = await server.sendTransaction(prepared);
 
     return {
       txHash: response.hash,
@@ -100,7 +101,6 @@ export async function executeSplit(
     };
   } catch (error) {
     console.error("Split execution failed:", error);
-    // Fallback to simulation
     await mockDelay(1000);
     return {
       txHash: `GBPROPULS0R${randomHex(8)}XF9A`,
@@ -128,8 +128,11 @@ export async function lockVault(
   }
 
   try {
+    const server = await getSorobanServer();
+    if (!server) throw new Error("Soroban server not available");
+
     const keypair = StellarSdk.Keypair.fromSecret(secretKey);
-    const account = await sorobanServer.getAccount(keypair.publicKey());
+    const account = await server.getAccount(keypair.publicKey());
 
     const contract = new StellarSdk.Contract(VAULT_CONTRACT_ID);
     const tx = new StellarSdk.TransactionBuilder(account, {
@@ -146,9 +149,9 @@ export async function lockVault(
       .setTimeout(30)
       .build();
 
-    const prepared = await sorobanServer.prepareTransaction(tx);
+    const prepared = await server.prepareTransaction(tx);
     (prepared as StellarSdk.Transaction).sign(keypair);
-    const response = await sorobanServer.sendTransaction(prepared);
+    const response = await server.sendTransaction(prepared);
 
     return {
       txHash: response.hash,
@@ -177,10 +180,6 @@ export async function getVaultBalances(
   }
 
   try {
-    // Attempt to read from Soroban contract state
-    const contract = new StellarSdk.Contract(VAULT_CONTRACT_ID);
-    // In real impl, read contract ledger entries
-    // For now, fall back to account balance split
     const accountBalance = await getAccountBalance(publicKey);
     return {
       balances: [
