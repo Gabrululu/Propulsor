@@ -85,13 +85,13 @@ export async function loadEncryptedSecret(
   userId: string
 ): Promise<string | null> {
   const { data, error } = await supabase
-    .from("users_profile" as any)
+    .from("users_profile")
     .select("stellar_secret_encrypted")
     .eq("id", userId)
     .single();
 
   if (error || !data) return null;
-  return (data as any).stellar_secret_encrypted ?? null;
+  return data.stellar_secret_encrypted ?? null;
 }
 
 // ── Verify PIN is correct (decrypt → check validity) ────────
