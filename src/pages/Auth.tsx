@@ -2,6 +2,21 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import {
+  kit,
+  FREIGHTER_ID,
+  XBULL_ID,
+  ALBEDO_ID,
+  LOBSTR_ID,
+  type WalletId,
+} from "@/lib/stellar/wallets-kit";
+
+const stellarWallets: { id: WalletId; name: string; icon: string; recommended?: boolean }[] = [
+  { id: FREIGHTER_ID, name: "Freighter", icon: "🚀", recommended: true },
+  { id: XBULL_ID, name: "xBull", icon: "🐂" },
+  { id: ALBEDO_ID, name: "Albedo", icon: "🌅" },
+  { id: LOBSTR_ID, name: "Lobstr", icon: "🦞" },
+];
 
 const Auth = () => {
   const [isLogin, setIsLogin] = useState(true);
@@ -9,6 +24,8 @@ const Auth = () => {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [verificationSent, setVerificationSent] = useState(false);
+  const [walletLoading, setWalletLoading] = useState<string | null>(null);
+  const [walletError, setWalletError] = useState("");
   const navigate = useNavigate();
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -35,6 +52,73 @@ const Auth = () => {
       toast.error(err.message || "Error de autenticación");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleWalletLogin = async (walletId: WalletId) => {
+    setWalletLoading(walletId);
+    setWalletError("");
+
+    try {
+      // Check availability for Freighter
+      if (walletId === FREIGHTER_ID) {
+        const available = await kit.isAvailable(FREIGHTER_ID);
+        if (!available) {
+          setWalletError("Freighter no está instalado. Instálalo desde freighter.app");
+          setWalletLoading(null);
+          return;
+        }
+      }
+
+      kit.setWallet(walletId);
+      const { address } = await kit.getAddress();
+
+      // Use the Stellar public key as a deterministic email+password for Supabase auth
+      const syntheticEmail = `${address.slice(0, 16).toLowerCase()}@stellar.propulsor.app`;
+      const syntheticPassword = `stlr_${address}`;
+
+      // Try to sign in first
+      const { error: signInError } = await supabase.auth.signInWithPassword({
+        email: syntheticEmail,
+        password: syntheticPassword,
+      });
+
+      if (signInError) {
+        // If sign-in fails, create account (auto-confirm since wallet proves identity)
+        const { error: signUpError } = await supabase.auth.signUp({
+          email: syntheticEmail,
+          password: syntheticPassword,
+          options: {
+            data: {
+              stellar_public_key: address,
+              auth_method: "stellar_wallet",
+            },
+          },
+        });
+
+        if (signUpError) throw signUpError;
+
+        // Sign in after signup
+        const { error: retryError } = await supabase.auth.signInWithPassword({
+          email: syntheticEmail,
+          password: syntheticPassword,
+        });
+
+        if (retryError) {
+          // Account created but needs email verification
+          toast.info("Cuenta creada. Por seguridad, verifica tu correo para continuar.");
+          setWalletLoading(null);
+          return;
+        }
+      }
+
+      toast.success(`Conectado con ${stellarWallets.find(w => w.id === walletId)?.name}`);
+      navigate("/onboarding");
+    } catch (err: any) {
+      console.error("Wallet auth error:", err);
+      setWalletError(err?.message || "No se pudo conectar la wallet");
+    } finally {
+      setWalletLoading(null);
     }
   };
 
@@ -68,6 +152,7 @@ const Auth = () => {
           <span className="text-primary">{isLogin ? "SESIÓN" : "CUENTA"}</span>
         </h1>
 
+        {/* Email/password form */}
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="block text-sm text-foreground font-semibold uppercase tracking-wider mb-2">
@@ -107,6 +192,62 @@ const Auth = () => {
             {loading ? "Procesando..." : isLogin ? "Entrar →" : "Crear cuenta →"}
           </button>
         </form>
+
+        {/* Divider */}
+        <div className="flex items-center gap-3 my-6">
+          <div className="flex-1 h-px bg-border" />
+          <span className="font-mono text-[0.6rem] text-muted-foreground uppercase tracking-wider">
+            O conecta tu wallet
+          </span>
+          <div className="flex-1 h-px bg-border" />
+        </div>
+
+        {/* Stellar wallet buttons */}
+        <div>
+          <span className="font-mono text-[0.65rem] uppercase tracking-widest text-secondary">
+            → WALLET STELLAR
+          </span>
+          <div className="grid grid-cols-2 gap-3 mt-3">
+            {stellarWallets.map((w) => (
+              <button
+                key={w.id}
+                onClick={() => handleWalletLogin(w.id)}
+                disabled={!!walletLoading}
+                className="relative p-3.5 rounded-sm border border-border bg-muted hover:border-secondary hover:bg-card transition-all text-left group disabled:opacity-50"
+              >
+                {w.recommended && (
+                  <span className="absolute top-2 right-2 font-mono text-[0.5rem] text-secondary uppercase tracking-wider">
+                    Recomendado
+                  </span>
+                )}
+                <span className="text-2xl block mb-1">
+                  {walletLoading === w.id ? (
+                    <span className="inline-block w-6 h-6 border-2 border-secondary border-t-transparent rounded-full animate-spin" />
+                  ) : (
+                    w.icon
+                  )}
+                </span>
+                <span className="text-sm text-foreground">{w.name}</span>
+              </button>
+            ))}
+          </div>
+
+          {walletError && (
+            <div className="mt-3 p-3 rounded-sm border border-border bg-card">
+              <p className="text-xs text-destructive font-mono">{walletError}</p>
+              {walletError.includes("Freighter") && (
+                <a
+                  href="https://freighter.app"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-xs font-mono text-secondary hover:underline mt-1 inline-block"
+                >
+                  Instalar Freighter →
+                </a>
+              )}
+            </div>
+          )}
+        </div>
 
         <p className="text-sm text-muted-foreground text-center mt-6">
           {isLogin ? "¿No tienes cuenta?" : "¿Ya tienes cuenta?"}{" "}
