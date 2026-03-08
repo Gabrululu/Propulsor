@@ -1,7 +1,15 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import PercentageSlider from "@/components/PercentageSlider";
 import TerminalBlock from "@/components/TerminalBlock";
+import SpeakerButton from "@/components/voice/SpeakerButton";
+import SoundWaveBars from "@/components/voice/SoundWaveBars";
+import { useVoice } from "@/hooks/useVoice";
+import {
+  ONBOARDING_WELCOME,
+  PROFILE_DESCRIPTIONS,
+  buildSplitConfirmation,
+} from "@/lib/voiceMessages";
 
 const profileTypes = [
   { key: "jefa_hogar", icon: "🏠", label: "Jefa de hogar", split: [60, 30, 10] },
@@ -17,7 +25,21 @@ const Onboarding = () => {
   const [percentages, setPercentages] = useState([60, 30, 10]);
   const [vaultNames, setVaultNames] = useState(["Hogar", "Fondo seguro", "Meta grande"]);
   const [deploying, setDeploying] = useState(false);
+  const [deployDone, setDeployDone] = useState(false);
   const navigate = useNavigate();
+  const { speak, stop, isSpeaking } = useVoice();
+  const welcomePlayed = useRef(false);
+
+  // Auto-play welcome on step 0 mount
+  useEffect(() => {
+    if (step === 0 && !welcomePlayed.current) {
+      welcomePlayed.current = true;
+      const timer = setTimeout(() => {
+        speak(ONBOARDING_WELCOME);
+      }, 600);
+      return () => clearTimeout(timer);
+    }
+  }, [step, speak]);
 
   const handleProfileSelect = (key: string) => {
     setProfileType(key);
@@ -25,10 +47,20 @@ const Onboarding = () => {
     if (found) setPercentages(found.split);
   };
 
+  const handleProfileHover = (key: string) => {
+    const desc = PROFILE_DESCRIPTIONS[key];
+    if (desc) speak(desc);
+  };
+
   const handleDeploy = () => {
     setDeploying(true);
     setTimeout(() => {
-      navigate("/dashboard");
+      setDeployDone(true);
+      // Speak confirmation
+      const msg = buildSplitConfirmation(vaultNames, percentages);
+      setTimeout(() => speak(msg), 600);
+      // Navigate after delay
+      setTimeout(() => navigate("/dashboard"), 4000);
     }, 2500);
   };
 
@@ -41,14 +73,25 @@ const Onboarding = () => {
             <div
               key={s}
               className="flex-1 h-1 rounded-sm transition-colors"
-              style={{ backgroundColor: s <= step ? "#ffb3c6" : "#2e2729" }}
+              style={{ backgroundColor: s <= step ? "hsl(var(--primary))" : "hsl(var(--background-hover))" }}
             />
           ))}
         </div>
 
         {/* Step 0 */}
         {step === 0 && (
-          <div>
+          <div className="relative">
+            {/* Speaker button */}
+            <div className="absolute top-0 right-0">
+              <SpeakerButton
+                isSpeaking={isSpeaking}
+                onClick={() => {
+                  if (isSpeaking) stop();
+                  else speak(ONBOARDING_WELCOME);
+                }}
+              />
+            </div>
+
             <span className="font-mono text-xs text-dimmed tracking-widest">PASO 1 DE 3</span>
             <h1 className="text-3xl md:text-4xl font-bold mt-2 mb-4">
               <span className="text-foreground">EMPIEZA A</span>{" "}
@@ -59,16 +102,10 @@ const Onboarding = () => {
             </p>
 
             <div className="space-y-3">
-              <button
-                onClick={() => setStep(1)}
-                className="btn-pink w-full rounded-sm text-center"
-              >
+              <button onClick={() => setStep(1)} className="btn-pink w-full rounded-sm text-center">
                 Crear cuenta nueva
               </button>
-              <button
-                onClick={() => {}}
-                className="btn-outline-pink w-full rounded-sm text-center"
-              >
+              <button onClick={() => {}} className="btn-outline-pink w-full rounded-sm text-center">
                 Tengo wallet Stellar
               </button>
             </div>
@@ -111,6 +148,8 @@ const Onboarding = () => {
                     <button
                       key={p.key}
                       onClick={() => handleProfileSelect(p.key)}
+                      onMouseEnter={() => handleProfileHover(p.key)}
+                      onTouchStart={() => handleProfileHover(p.key)}
                       className={`p-4 rounded-sm border text-left transition-colors ${
                         profileType === p.key
                           ? "border-pink-visible bg-card-dark"
@@ -176,7 +215,7 @@ const Onboarding = () => {
           </div>
         )}
 
-        {/* Deploying */}
+        {/* Deploying / Success */}
         {deploying && (
           <div className="text-center">
             <TerminalBlock
@@ -192,7 +231,26 @@ const Onboarding = () => {
                 { text: "→ Tx: GBPROPULSOR...XF9A ✓", color: "mint" },
               ]}
             />
-            <p className="text-body-muted text-sm mt-6">Preparando tu espacio...</p>
+
+            {deployDone && (
+              <div className="mt-6 flex flex-col items-center gap-3">
+                <SoundWaveBars isActive={isSpeaking} />
+                <p className="text-body-muted text-sm">Tu dinero ya está protegido.</p>
+                <button
+                  onClick={() => {
+                    const msg = buildSplitConfirmation(vaultNames, percentages);
+                    speak(msg);
+                  }}
+                  className="font-mono text-[0.6rem] uppercase tracking-wider text-dimmed hover:text-pink transition-colors"
+                >
+                  🔊 Escuchar de nuevo
+                </button>
+              </div>
+            )}
+
+            {!deployDone && (
+              <p className="text-body-muted text-sm mt-6">Preparando tu espacio...</p>
+            )}
           </div>
         )}
       </div>
