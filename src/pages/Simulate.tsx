@@ -1,10 +1,13 @@
-import { useState } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { Link } from "react-router-dom";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import PercentageSlider from "@/components/PercentageSlider";
 import SplitBar from "@/components/SplitBar";
 import TerminalBlock from "@/components/TerminalBlock";
+import SoundWaveBars from "@/components/voice/SoundWaveBars";
+import { useVoice } from "@/hooks/useVoice";
+import { buildSimulatorSummary } from "@/lib/voiceMessages";
 
 const RATE = 3.71; // PEN to USD
 
@@ -13,11 +16,36 @@ const Simulate = () => {
   const [percentages, setPercentages] = useState([60, 30, 10]);
   const [vaultNames] = useState(["Hogar", "Fondo seguro", "Meta grande"]);
   const [locks, setLocks] = useState([false, false, true]);
+  const { speak, stop, isSpeaking } = useVoice();
+  const hasListened = useRef(false);
+  const debounceRef = useRef<ReturnType<typeof setTimeout>>();
 
   const pen = parseFloat(amountPEN) || 0;
   const usdc = pen / RATE;
-
   const splits = percentages.map((p) => (usdc * p) / 100);
+
+  // Debounced auto-speak when user has already listened once
+  useEffect(() => {
+    if (!hasListened.current) return;
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      const msg = buildSimulatorSummary(pen, vaultNames, percentages);
+      speak(msg);
+    }, 1200);
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+  }, [pen, percentages, vaultNames, speak]);
+
+  const handleListenClick = useCallback(() => {
+    if (isSpeaking) {
+      stop();
+      return;
+    }
+    hasListened.current = true;
+    const msg = buildSimulatorSummary(pen, vaultNames, percentages);
+    speak(msg);
+  }, [isSpeaking, stop, pen, vaultNames, percentages, speak]);
 
   const terminalLines = [
     { text: "// propulsor::simulate", color: "dimmed" as const },
@@ -50,7 +78,6 @@ const Simulate = () => {
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
             {/* Left — inputs */}
             <div className="space-y-8">
-              {/* Amount */}
               <div>
                 <label className="block text-sm text-foreground font-semibold uppercase tracking-wider mb-2">
                   Monto en Soles (PEN)
@@ -71,7 +98,6 @@ const Simulate = () => {
                 </p>
               </div>
 
-              {/* Vault config */}
               <div>
                 <label className="block text-sm text-foreground font-semibold uppercase tracking-wider mb-4">
                   Distribución
@@ -84,7 +110,6 @@ const Simulate = () => {
                 />
               </div>
 
-              {/* Lock toggles */}
               <div className="space-y-3">
                 {vaultNames.map((name, i) => (
                   <div key={i} className="flex items-center justify-between bg-card-dark p-3 rounded-sm border border-pink-subtle">
@@ -110,7 +135,6 @@ const Simulate = () => {
                 ))}
               </div>
 
-              {/* Warning if not 100% */}
               {percentages.reduce((a, b) => a + b, 0) !== 100 && (
                 <p className="text-pink text-xs font-mono">
                   ⚠ Los porcentajes deben sumar 100%
@@ -120,7 +144,6 @@ const Simulate = () => {
 
             {/* Right — output */}
             <div className="space-y-6">
-              {/* Split bar */}
               <SplitBar
                 segments={percentages.map((p, i) => ({
                   percentage: p,
@@ -130,7 +153,6 @@ const Simulate = () => {
                 height={12}
               />
 
-              {/* Breakdown cards */}
               <div className="space-y-3">
                 {vaultNames.map((name, i) => (
                   <div
@@ -153,11 +175,23 @@ const Simulate = () => {
                 ))}
               </div>
 
-              {/* Terminal */}
               <TerminalBlock lines={terminalLines} title="soroban :: simulate.rs" />
 
-              {/* CTA */}
-              <Link to="/dashboard" className="btn-pink rounded-sm block text-center mt-6">
+              {/* Voice summary button */}
+              <button
+                onClick={handleListenClick}
+                className="w-full p-3 rounded-sm border transition-colors flex items-center justify-center gap-3 bg-card-dark"
+                style={{
+                  borderColor: isSpeaking ? "rgba(255,179,198,0.4)" : "rgba(255,179,198,0.18)",
+                }}
+              >
+                <SoundWaveBars isActive={isSpeaking} />
+                <span className="font-mono text-[0.7rem] uppercase tracking-wider text-pink">
+                  {isSpeaking ? "⏹ DETENER" : "🔊 ESCUCHAR RESUMEN"}
+                </span>
+              </button>
+
+              <Link to="/dashboard" className="btn-pink rounded-sm block text-center mt-2">
                 Crear mi cuenta y activar esto →
               </Link>
             </div>
