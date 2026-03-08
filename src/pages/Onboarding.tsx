@@ -6,6 +6,8 @@ import SpeakerButton from "@/components/voice/SpeakerButton";
 import SoundWaveBars from "@/components/voice/SoundWaveBars";
 import ConnectModal from "@/components/stellar/ConnectModal";
 import { useVoice } from "@/hooks/useVoice";
+import { useAuth } from "@/hooks/useAuth";
+import { supabase } from "@/integrations/supabase/client";
 import {
   ONBOARDING_WELCOME,
   PROFILE_DESCRIPTIONS,
@@ -20,7 +22,6 @@ const profileTypes = [
 ];
 
 const Onboarding = () => {
-  // Steps: 0=welcome, 1=profile, 2=connect wallet, 3=vaults, deploying, done
   const [step, setStep] = useState(0);
   const [name, setName] = useState("");
   const [profileType, setProfileType] = useState("");
@@ -31,9 +32,10 @@ const Onboarding = () => {
   const [stellarPublicKey, setStellarPublicKey] = useState("");
   const navigate = useNavigate();
   const { speak, stop, isSpeaking } = useVoice();
+  const { user } = useAuth();
   const welcomePlayed = useRef(false);
 
-  const totalSteps = 4; // 0,1,2,3
+  const totalSteps = 4;
 
   useEffect(() => {
     if (step === 0 && !welcomePlayed.current) {
@@ -56,12 +58,35 @@ const Onboarding = () => {
 
   const handleWalletConnected = (mode: "custodial" | "external", publicKey: string) => {
     setStellarPublicKey(publicKey);
-    // Auto-advance to vaults step after a short delay
     setTimeout(() => setStep(3), 800);
   };
 
-  const handleDeploy = () => {
+  const handleDeploy = async () => {
     setDeploying(true);
+
+    // Save profile to Supabase
+    if (user) {
+      const profileData: Record<string, any> = {
+        id: user.id,
+        name: name.trim(),
+        profile_type: profileType as any,
+        onboarding_complete: true,
+      };
+
+      // Only set stellar_public_key if we have it (custodial already saved it, but external needs it)
+      if (stellarPublicKey) {
+        profileData.stellar_public_key = stellarPublicKey;
+      }
+
+      const { error } = await supabase
+        .from("users_profile")
+        .upsert(profileData, { onConflict: "id" });
+
+      if (error) {
+        console.error("Failed to save profile:", error.message);
+      }
+    }
+
     setTimeout(() => {
       setDeployDone(true);
       const msg = buildSplitConfirmation(vaultNames, percentages);
@@ -93,12 +118,12 @@ const Onboarding = () => {
                 onClick={() => { if (isSpeaking) stop(); else speak(ONBOARDING_WELCOME); }}
               />
             </div>
-            <span className="font-mono text-xs text-dimmed tracking-widest">PASO 1 DE {totalSteps}</span>
+            <span className="font-mono text-xs text-muted-foreground tracking-widest">PASO 1 DE {totalSteps}</span>
             <h1 className="text-3xl md:text-4xl font-bold mt-2 mb-4">
               <span className="text-foreground">EMPIEZA A</span>{" "}
-              <span className="text-pink">PROTEGER TU DINERO</span>
+              <span className="text-primary">PROTEGER TU DINERO</span>
             </h1>
-            <p className="text-body-muted text-sm mb-8 leading-relaxed">
+            <p className="text-muted-foreground text-sm mb-8 leading-relaxed">
               Propulsor separa tu dinero automáticamente en bóvedas inteligentes. Sin banco. Sin permiso. Solo tú y tu código.
             </p>
             <button onClick={() => setStep(1)} className="btn-pink w-full rounded-sm text-center">
@@ -110,10 +135,10 @@ const Onboarding = () => {
         {/* Step 1: Profile */}
         {step === 1 && (
           <div>
-            <span className="font-mono text-xs text-dimmed tracking-widest">PASO 2 DE {totalSteps}</span>
+            <span className="font-mono text-xs text-muted-foreground tracking-widest">PASO 2 DE {totalSteps}</span>
             <h1 className="text-3xl font-bold mt-2 mb-6">
               <span className="text-foreground">CONFIGURA TU </span>
-              <span className="text-pink">PERFIL</span>
+              <span className="text-primary">PERFIL</span>
             </h1>
             <div className="space-y-4">
               <div>
@@ -122,7 +147,7 @@ const Onboarding = () => {
                   type="text"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  className="w-full bg-card-dark border border-pink-subtle rounded-sm px-4 py-3 text-foreground text-sm focus:outline-none focus:border-pink-visible"
+                  className="w-full bg-card border border-border rounded-sm px-4 py-3 text-foreground text-sm focus:outline-none focus:ring-1 focus:ring-primary"
                   placeholder="¿Cómo te llamas?"
                 />
               </div>
@@ -136,7 +161,7 @@ const Onboarding = () => {
                       onMouseEnter={() => handleProfileHover(p.key)}
                       onTouchStart={() => handleProfileHover(p.key)}
                       className={`p-4 rounded-sm border text-left transition-colors ${
-                        profileType === p.key ? "border-pink-visible bg-card-dark" : "border-pink-subtle hover:bg-hover-dark"
+                        profileType === p.key ? "border-primary bg-card" : "border-border hover:bg-muted"
                       }`}
                     >
                       <span className="text-2xl block mb-1">{p.icon}</span>
@@ -157,31 +182,28 @@ const Onboarding = () => {
           </div>
         )}
 
-        {/* Step 2: Connect Wallet (dual path) */}
+        {/* Step 2: Connect Wallet */}
         {step === 2 && (
           <div>
-            <span className="font-mono text-xs text-dimmed tracking-widest">PASO 3 DE {totalSteps}</span>
+            <span className="font-mono text-xs text-muted-foreground tracking-widest">PASO 3 DE {totalSteps}</span>
             <h1 className="text-2xl font-bold mt-2 mb-6">
               <span className="text-foreground">ELIGE CÓMO </span>
-              <span className="text-pink">CONECTARTE</span>
+              <span className="text-primary">CONECTARTE</span>
             </h1>
-            <p className="text-body-muted text-sm mb-6 leading-relaxed">
+            <p className="text-muted-foreground text-sm mb-6 leading-relaxed">
               Puedes empezar sin wallet — nosotros creamos tu cuenta Stellar.
             </p>
-            <ConnectModal
-              embedded={true}
-              onConnected={handleWalletConnected}
-            />
+            <ConnectModal embedded={true} onConnected={handleWalletConnected} />
           </div>
         )}
 
         {/* Step 3: Vaults */}
         {step === 3 && !deploying && (
           <div>
-            <span className="font-mono text-xs text-dimmed tracking-widest">PASO 4 DE {totalSteps}</span>
+            <span className="font-mono text-xs text-muted-foreground tracking-widest">PASO 4 DE {totalSteps}</span>
             <h1 className="text-3xl font-bold mt-2 mb-6">
               <span className="text-foreground">DEFINE TUS </span>
-              <span className="text-pink">BÓVEDAS</span>
+              <span className="text-primary">BÓVEDAS</span>
             </h1>
             <div className="space-y-4 mb-6">
               {vaultNames.map((vn, i) => (
@@ -195,7 +217,7 @@ const Onboarding = () => {
                       next[i] = e.target.value;
                       setVaultNames(next);
                     }}
-                    className="flex-1 bg-card-dark border border-pink-subtle rounded-sm px-3 py-2 text-foreground text-sm focus:outline-none focus:border-pink-visible"
+                    className="flex-1 bg-card border border-border rounded-sm px-3 py-2 text-foreground text-sm focus:outline-none focus:ring-1 focus:ring-primary"
                   />
                 </div>
               ))}
@@ -231,19 +253,19 @@ const Onboarding = () => {
             {deployDone && (
               <div className="mt-6 flex flex-col items-center gap-3">
                 <SoundWaveBars isActive={isSpeaking} />
-                <p className="text-body-muted text-sm">Tu dinero ya está protegido.</p>
+                <p className="text-muted-foreground text-sm">Tu dinero ya está protegido.</p>
                 <button
                   onClick={() => {
                     const msg = buildSplitConfirmation(vaultNames, percentages);
                     speak(msg);
                   }}
-                  className="font-mono text-[0.6rem] uppercase tracking-wider text-dimmed hover:text-pink transition-colors"
+                  className="font-mono text-[0.6rem] uppercase tracking-wider text-muted-foreground hover:text-primary transition-colors"
                 >
                   🔊 Escuchar de nuevo
                 </button>
               </div>
             )}
-            {!deployDone && <p className="text-body-muted text-sm mt-6">Preparando tu espacio...</p>}
+            {!deployDone && <p className="text-muted-foreground text-sm mt-6">Preparando tu espacio...</p>}
           </div>
         )}
       </div>
