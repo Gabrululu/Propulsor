@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { horizonServer, STELLAR_EXPLORER_BASE } from "@/lib/stellar/client";
+import { getHorizonServer, STELLAR_EXPLORER_BASE } from "@/lib/stellar/client";
 
 export interface StellarTransaction {
   id: string;
@@ -21,7 +21,8 @@ export function useStellarTransactions(publicKey: string | null) {
     const fetchTxs = async () => {
       setLoading(true);
       try {
-        const response = await horizonServer
+        const server = await getHorizonServer();
+        const response = await server
           .transactions()
           .forAccount(publicKey)
           .order("desc")
