@@ -8,8 +8,10 @@ import TerminalBlock from "@/components/TerminalBlock";
 import SoundWaveBars from "@/components/voice/SoundWaveBars";
 import { useVoice } from "@/hooks/useVoice";
 import { buildSimulatorSummary } from "@/lib/voiceMessages";
+import { useStellarFees } from "@/hooks/useStellarFees";
 
 const RATE = 3.71; // PEN to USD
+const BANK_MONTHLY_FEE = 15; // S/15.00/mes average bank fee
 
 const Simulate = () => {
   const [amountPEN, setAmountPEN] = useState("1000");
@@ -19,12 +21,16 @@ const Simulate = () => {
   const { speak, stop, isSpeaking } = useVoice();
   const hasListened = useRef(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout>>();
+  const fees = useStellarFees();
 
   const pen = parseFloat(amountPEN) || 0;
   const usdc = pen / RATE;
   const splits = percentages.map((p) => (usdc * p) / 100);
 
-  // Debounced auto-speak when user has already listened once
+  // Annual savings compared to bank
+  const annualSavings = BANK_MONTHLY_FEE * 12;
+
+  // Debounced auto-speak
   useEffect(() => {
     if (!hasListened.current) return;
     if (debounceRef.current) clearTimeout(debounceRef.current);
@@ -32,20 +38,19 @@ const Simulate = () => {
       const msg = buildSimulatorSummary(pen, vaultNames, percentages);
       speak(msg);
     }, 1200);
-    return () => {
-      if (debounceRef.current) clearTimeout(debounceRef.current);
-    };
+    return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
   }, [pen, percentages, vaultNames, speak]);
 
   const handleListenClick = useCallback(() => {
-    if (isSpeaking) {
-      stop();
-      return;
-    }
+    if (isSpeaking) { stop(); return; }
     hasListened.current = true;
     const msg = buildSimulatorSummary(pen, vaultNames, percentages);
     speak(msg);
   }, [isSpeaking, stop, pen, vaultNames, percentages, speak]);
+
+  const feeDisplay = fees.loading
+    ? "$0.00001 USD (cargando...)"
+    : `$${fees.feeUSD.toFixed(6)} USD (${fees.baseFeeStroops} stroops)`;
 
   const terminalLines = [
     { text: "// propulsor::simulate", color: "dimmed" as const },
@@ -57,7 +62,7 @@ const Simulate = () => {
       color: (i === 1 ? "mint" : "pink") as "mint" | "pink",
     })),
     { text: "", color: "default" as const },
-    { text: `→ Fee estimado: $0.00001 USD en Stellar`, color: "mint" as const },
+    { text: `→ Fee estimado: ${feeDisplay}`, color: "mint" as const },
     { text: `→ Tx: GBSIMULADOR...XF9A ✓`, color: "mint" as const },
   ];
 
@@ -173,6 +178,24 @@ const Simulate = () => {
                     </span>
                   </div>
                 ))}
+              </div>
+
+              {/* Fee comparison */}
+              <div className="bg-card-dark border border-pink-subtle rounded-sm p-4 space-y-2">
+                <div className="flex justify-between items-center">
+                  <span className="text-xs text-body-muted font-mono">Fee Stellar</span>
+                  <span className="text-xs text-mint font-mono font-bold">
+                    {fees.loading ? "..." : `$${fees.feeUSD.toFixed(6)} USD`}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-xs text-body-muted font-mono">Comisión bancaria promedio</span>
+                  <span className="text-xs text-pink-soft font-mono">S/15.00/mes</span>
+                </div>
+                <div className="border-t border-pink-subtle pt-2 flex justify-between items-center">
+                  <span className="text-xs text-foreground font-mono font-semibold">Ahorro anual estimado</span>
+                  <span className="text-sm text-pink font-mono font-bold">S/{annualSavings.toFixed(2)}</span>
+                </div>
               </div>
 
               <TerminalBlock lines={terminalLines} title="soroban :: simulate.rs" />
