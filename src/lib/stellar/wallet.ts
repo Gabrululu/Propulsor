@@ -1,6 +1,6 @@
 import * as StellarSdk from "@stellar/stellar-sdk";
 import {
-  horizonServer,
+  getHorizonServer,
   FRIENDBOT_URL,
   USDC_ASSET_CODE,
   USDC_ISSUER,
