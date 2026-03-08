@@ -15,7 +15,7 @@ export const USDC_ISSUER = "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLL
 export const horizonServer = new StellarSdk.Horizon.Server(HORIZON_URL);
 
 // Soroban RPC server instance
-export const sorobanServer = new StellarSdk.SorobanRpc.Server(SOROBAN_RPC_URL);
+export const sorobanServer = new (StellarSdk as any).SorobanRpc.Server(SOROBAN_RPC_URL);
 
 // Contract IDs from env (empty = simulation mode)
 export const SPLIT_CONTRACT_ID = import.meta.env.VITE_SPLIT_CONTRACT_ID || "";

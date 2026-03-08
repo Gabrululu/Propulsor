@@ -86,9 +86,9 @@ export async function encryptSecretKey(secretKey: string, pin: string): Promise<
   const key = await deriveKey(pin, salt);
 
   const ciphertext = await crypto.subtle.encrypt(
-    { name: "AES-GCM", iv },
+    { name: "AES-GCM", iv: iv as unknown as ArrayBuffer },
     key,
-    enc.encode(secretKey)
+    enc.encode(secretKey) as unknown as ArrayBuffer
   );
 
   // Pack salt + iv + ciphertext as base64
