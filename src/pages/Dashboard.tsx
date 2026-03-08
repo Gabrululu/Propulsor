@@ -1,6 +1,14 @@
+import { useEffect, useRef } from "react";
 import DashboardLayout from "@/components/DashboardLayout";
 import SplitBar from "@/components/SplitBar";
 import TxRow from "@/components/TxRow";
+import { useStellarBalance } from "@/hooks/useStellarBalance";
+import { isSimulationMode } from "@/lib/stellar/client";
+import { horizonServer } from "@/lib/stellar/client";
+import { toast } from "@/hooks/use-toast";
+
+// For demo: use a mock public key (in real app, comes from auth context)
+const DEMO_PUBLIC_KEY = null; // Set to real key after onboarding
 
 const mockVaults = [
   { name: "Hogar", icon: "🏠", balance: 162.35, pct: 60, color: "pink" as const },
@@ -17,7 +25,39 @@ const mockTxs = [
 const colorBg: Record<string, string> = { pink: "#ffb3c6", mint: "#b8f0c8", "pink-soft": "#e8a0b4" };
 
 const Dashboard = () => {
-  const totalBalance = mockVaults.reduce((s, v) => s + v.balance, 0);
+  const { balance } = useStellarBalance(DEMO_PUBLIC_KEY);
+  const streamRef = useRef<(() => void) | null>(null);
+
+  // Real-time payment streaming
+  useEffect(() => {
+    if (!DEMO_PUBLIC_KEY) return;
+
+    try {
+      const closeStream = horizonServer
+        .payments()
+        .forAccount(DEMO_PUBLIC_KEY)
+        .stream({
+          onmessage: (payment: any) => {
+            if (payment.type === "payment" && payment.to === DEMO_PUBLIC_KEY) {
+              toast({
+                title: "💜 Pago recibido",
+                description: `+${parseFloat(payment.amount).toFixed(2)} ${payment.asset_code || "XLM"}`,
+              });
+            }
+          },
+        });
+      streamRef.current = closeStream as unknown as () => void;
+    } catch {
+      // Streaming not available
+    }
+
+    return () => {
+      if (streamRef.current) streamRef.current();
+    };
+  }, []);
+
+  // Use Stellar balance if available, otherwise mock
+  const totalBalance = DEMO_PUBLIC_KEY ? balance.usdc : mockVaults.reduce((s, v) => s + v.balance, 0);
 
   return (
     <DashboardLayout>
@@ -28,10 +68,15 @@ const Dashboard = () => {
             <h1 className="text-2xl font-bold text-foreground">Hola, María 👋</h1>
             <p className="text-body-muted text-xs font-mono mt-1">8 de marzo, 2026</p>
           </div>
-          <span className="font-mono text-[10px] text-mint bg-deep px-3 py-1 rounded-sm border border-mint-visible">
-            ● Stellar Mainnet
-          </span>
+          {/* Network status is now in DashboardLayout */}
         </div>
+
+        {/* Simulation badge */}
+        {isSimulationMode && (
+          <div className="mb-4 inline-flex items-center gap-1.5 font-mono text-[0.6rem] px-2.5 py-1 rounded-sm border border-pink-visible bg-card-dark text-pink-soft">
+            ⚡ TESTNET SIMULATION — Contratos aún no desplegados
+          </div>
+        )}
 
         {/* Balance card */}
         <div className="bg-card-dark border border-pink-subtle rounded-sm p-6 mb-8">
@@ -43,6 +88,9 @@ const Dashboard = () => {
             <span className="text-body-muted text-sm">USDC</span>
           </div>
           <p className="text-dimmed text-xs font-mono mt-1">≈ S/ {(totalBalance * 3.71).toFixed(2)}</p>
+          {DEMO_PUBLIC_KEY && balance.xlm > 0 && (
+            <p className="text-dimmed text-xs font-mono mt-0.5">{balance.xlm.toFixed(4)} XLM</p>
+          )}
 
           <div className="mt-6">
             <SplitBar

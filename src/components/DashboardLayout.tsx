@@ -1,5 +1,6 @@
 import { ReactNode } from "react";
 import { Link, useLocation } from "react-router-dom";
+import NetworkStatusPill from "@/components/NetworkStatusPill";
 
 const navItems = [
   { label: "Dashboard", path: "/dashboard", icon: "📊" },
@@ -13,11 +14,17 @@ const DashboardLayout = ({ children }: { children: ReactNode }) => {
 
   return (
     <div className="min-h-screen bg-background flex">
-      {/* Sidebar — hidden on mobile, shown as bottom nav */}
+      {/* Sidebar */}
       <aside className="hidden md:flex flex-col w-56 bg-deep border-r border-pink-subtle p-4 fixed top-0 left-0 h-screen">
-        <Link to="/" className="text-pink font-bold text-lg mb-8 tracking-tight">
+        <Link to="/" className="text-pink font-bold text-lg mb-6 tracking-tight">
           PROPULSOR
         </Link>
+
+        {/* Network status */}
+        <div className="mb-6">
+          <NetworkStatusPill />
+        </div>
+
         <nav className="flex-1 space-y-1">
           {navItems.map((item) => {
             const active = location.pathname === item.path;

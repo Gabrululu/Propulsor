@@ -4,6 +4,7 @@ import PercentageSlider from "@/components/PercentageSlider";
 import TerminalBlock from "@/components/TerminalBlock";
 import SpeakerButton from "@/components/voice/SpeakerButton";
 import SoundWaveBars from "@/components/voice/SoundWaveBars";
+import StellarAccountSetup from "@/components/StellarAccountSetup";
 import { useVoice } from "@/hooks/useVoice";
 import {
   ONBOARDING_WELCOME,
@@ -19,6 +20,7 @@ const profileTypes = [
 ];
 
 const Onboarding = () => {
+  // Steps: 0=welcome, 1=profile, 2=stellar account, 3=vaults, deploying, done
   const [step, setStep] = useState(0);
   const [name, setName] = useState("");
   const [profileType, setProfileType] = useState("");
@@ -26,17 +28,17 @@ const Onboarding = () => {
   const [vaultNames, setVaultNames] = useState(["Hogar", "Fondo seguro", "Meta grande"]);
   const [deploying, setDeploying] = useState(false);
   const [deployDone, setDeployDone] = useState(false);
+  const [stellarPublicKey, setStellarPublicKey] = useState("");
   const navigate = useNavigate();
   const { speak, stop, isSpeaking } = useVoice();
   const welcomePlayed = useRef(false);
 
-  // Auto-play welcome on step 0 mount
+  const totalSteps = 4; // 0,1,2,3
+
   useEffect(() => {
     if (step === 0 && !welcomePlayed.current) {
       welcomePlayed.current = true;
-      const timer = setTimeout(() => {
-        speak(ONBOARDING_WELCOME);
-      }, 600);
+      const timer = setTimeout(() => speak(ONBOARDING_WELCOME), 600);
       return () => clearTimeout(timer);
     }
   }, [step, speak]);
@@ -52,14 +54,18 @@ const Onboarding = () => {
     if (desc) speak(desc);
   };
 
+  const handleStellarComplete = (pubKey: string, _encryptedSecret: string) => {
+    setStellarPublicKey(pubKey);
+    // Auto-advance to vaults step
+    setTimeout(() => setStep(3), 600);
+  };
+
   const handleDeploy = () => {
     setDeploying(true);
     setTimeout(() => {
       setDeployDone(true);
-      // Speak confirmation
       const msg = buildSplitConfirmation(vaultNames, percentages);
       setTimeout(() => speak(msg), 600);
-      // Navigate after delay
       setTimeout(() => navigate("/dashboard"), 4000);
     }, 2500);
   };
@@ -69,7 +75,7 @@ const Onboarding = () => {
       <div className="w-full max-w-lg">
         {/* Progress */}
         <div className="flex gap-2 mb-8">
-          {[0, 1, 2].map((s) => (
+          {Array.from({ length: totalSteps }).map((_, s) => (
             <div
               key={s}
               className="flex-1 h-1 rounded-sm transition-colors"
@@ -78,21 +84,16 @@ const Onboarding = () => {
           ))}
         </div>
 
-        {/* Step 0 */}
+        {/* Step 0: Welcome */}
         {step === 0 && (
           <div className="relative">
-            {/* Speaker button */}
             <div className="absolute top-0 right-0">
               <SpeakerButton
                 isSpeaking={isSpeaking}
-                onClick={() => {
-                  if (isSpeaking) stop();
-                  else speak(ONBOARDING_WELCOME);
-                }}
+                onClick={() => { if (isSpeaking) stop(); else speak(ONBOARDING_WELCOME); }}
               />
             </div>
-
-            <span className="font-mono text-xs text-dimmed tracking-widest">PASO 1 DE 3</span>
+            <span className="font-mono text-xs text-dimmed tracking-widest">PASO 1 DE {totalSteps}</span>
             <h1 className="text-3xl md:text-4xl font-bold mt-2 mb-4">
               <span className="text-foreground">EMPIEZA A</span>{" "}
               <span className="text-pink">PROTEGER TU DINERO</span>
@@ -100,7 +101,6 @@ const Onboarding = () => {
             <p className="text-body-muted text-sm mb-8 leading-relaxed">
               Propulsor separa tu dinero automáticamente en bóvedas inteligentes. Sin banco. Sin permiso. Solo tú y tu código.
             </p>
-
             <div className="space-y-3">
               <button onClick={() => setStep(1)} className="btn-pink w-full rounded-sm text-center">
                 Crear cuenta nueva
@@ -109,27 +109,23 @@ const Onboarding = () => {
                 Tengo wallet Stellar
               </button>
             </div>
-
             <p className="text-dimmed text-xs font-mono mt-4 text-center">
               La integración con wallets Stellar estará disponible próximamente.
             </p>
           </div>
         )}
 
-        {/* Step 1 */}
+        {/* Step 1: Profile */}
         {step === 1 && (
           <div>
-            <span className="font-mono text-xs text-dimmed tracking-widest">PASO 2 DE 3</span>
+            <span className="font-mono text-xs text-dimmed tracking-widest">PASO 2 DE {totalSteps}</span>
             <h1 className="text-3xl font-bold mt-2 mb-6">
               <span className="text-foreground">CONFIGURA TU </span>
               <span className="text-pink">PERFIL</span>
             </h1>
-
             <div className="space-y-4">
               <div>
-                <label className="block text-sm text-foreground font-semibold uppercase tracking-wider mb-2">
-                  Tu nombre
-                </label>
+                <label className="block text-sm text-foreground font-semibold uppercase tracking-wider mb-2">Tu nombre</label>
                 <input
                   type="text"
                   value={name}
@@ -138,11 +134,8 @@ const Onboarding = () => {
                   placeholder="¿Cómo te llamas?"
                 />
               </div>
-
               <div>
-                <label className="block text-sm text-foreground font-semibold uppercase tracking-wider mb-3">
-                  ¿Cómo te describes?
-                </label>
+                <label className="block text-sm text-foreground font-semibold uppercase tracking-wider mb-3">¿Cómo te describes?</label>
                 <div className="grid grid-cols-2 gap-3">
                   {profileTypes.map((p) => (
                     <button
@@ -151,9 +144,7 @@ const Onboarding = () => {
                       onMouseEnter={() => handleProfileHover(p.key)}
                       onTouchStart={() => handleProfileHover(p.key)}
                       className={`p-4 rounded-sm border text-left transition-colors ${
-                        profileType === p.key
-                          ? "border-pink-visible bg-card-dark"
-                          : "border-pink-subtle hover:bg-hover-dark"
+                        profileType === p.key ? "border-pink-visible bg-card-dark" : "border-pink-subtle hover:bg-hover-dark"
                       }`}
                     >
                       <span className="text-2xl block mb-1">{p.icon}</span>
@@ -163,7 +154,6 @@ const Onboarding = () => {
                 </div>
               </div>
             </div>
-
             <button
               onClick={() => setStep(2)}
               disabled={!name.trim() || !profileType}
@@ -175,15 +165,24 @@ const Onboarding = () => {
           </div>
         )}
 
-        {/* Step 2 */}
-        {step === 2 && !deploying && (
+        {/* Step 2: Stellar Account Creation */}
+        {step === 2 && (
           <div>
-            <span className="font-mono text-xs text-dimmed tracking-widest">PASO 3 DE 3</span>
+            <div className="flex gap-2 items-center mb-2">
+              <span className="font-mono text-xs text-dimmed tracking-widest">PASO 3 DE {totalSteps}</span>
+            </div>
+            <StellarAccountSetup onComplete={handleStellarComplete} />
+          </div>
+        )}
+
+        {/* Step 3: Vaults */}
+        {step === 3 && !deploying && (
+          <div>
+            <span className="font-mono text-xs text-dimmed tracking-widest">PASO 4 DE {totalSteps}</span>
             <h1 className="text-3xl font-bold mt-2 mb-6">
               <span className="text-foreground">DEFINE TUS </span>
               <span className="text-pink">BÓVEDAS</span>
             </h1>
-
             <div className="space-y-4 mb-6">
               {vaultNames.map((vn, i) => (
                 <div key={i} className="flex items-center gap-3">
@@ -201,14 +200,12 @@ const Onboarding = () => {
                 </div>
               ))}
             </div>
-
             <PercentageSlider
               values={percentages}
               labels={vaultNames}
               colors={["pink", "mint", "pink-soft"]}
               onChange={setPercentages}
             />
-
             <button onClick={handleDeploy} className="btn-pink w-full rounded-sm mt-8">
               Crear mis bóvedas →
             </button>
@@ -228,10 +225,9 @@ const Onboarding = () => {
                 { text: `→ ${vaultNames[2]} (${percentages[2]}%)`, color: "pink" },
                 { text: "", color: "default" },
                 { text: "Desplegando contrato...", color: "default" },
-                { text: "→ Tx: GBPROPULSOR...XF9A ✓", color: "mint" },
+                { text: `→ Tx: GBPROPULSOR...XF9A ✓`, color: "mint" },
               ]}
             />
-
             {deployDone && (
               <div className="mt-6 flex flex-col items-center gap-3">
                 <SoundWaveBars isActive={isSpeaking} />
@@ -247,10 +243,7 @@ const Onboarding = () => {
                 </button>
               </div>
             )}
-
-            {!deployDone && (
-              <p className="text-body-muted text-sm mt-6">Preparando tu espacio...</p>
-            )}
+            {!deployDone && <p className="text-body-muted text-sm mt-6">Preparando tu espacio...</p>}
           </div>
         )}
       </div>
