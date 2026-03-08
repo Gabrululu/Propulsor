@@ -1,6 +1,7 @@
 import { ReactNode } from "react";
 import { Link, useLocation } from "react-router-dom";
 import NetworkStatusPill from "@/components/NetworkStatusPill";
+import WalletDisplay from "@/components/stellar/WalletDisplay";
 
 const navItems = [
   { label: "Dashboard", path: "/dashboard", icon: "📊" },
@@ -44,12 +45,9 @@ const DashboardLayout = ({ children }: { children: ReactNode }) => {
             );
           })}
         </nav>
-        <div className="border-t border-pink-subtle pt-4">
-          <p className="font-mono text-xs text-dimmed truncate">GBPR...XF9A</p>
-          <button className="text-xs text-body-muted hover:text-pink mt-2 font-mono transition-colors">
-            Desconectar
-          </button>
-        </div>
+
+        {/* Wallet display */}
+        <WalletDisplay />
       </aside>
 
       {/* Main content */}

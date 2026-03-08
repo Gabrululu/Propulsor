@@ -3,3 +3,8 @@ export { generateKeypair, fundTestnetAccount, getAccountBalance, encryptSecretKe
 export type { AccountBalances } from "./wallet";
 export { executeSplit, lockVault, getVaultBalances } from "./contracts";
 export type { SplitResult, LockResult, VaultBalances } from "./contracts";
+export { kit, FREIGHTER_ID, XBULL_ID, ALBEDO_ID, LOBSTR_ID, StellarWalletsKit, createDefaultModules, getWalletAddress, signWithWallet } from "./wallets-kit";
+export type { WalletId, WalletModule } from "./wallets-kit";
+export { createCustodialAccount, signCustodial, loadEncryptedSecret, verifyPin } from "./custody";
+export { WalletProvider, useWallet } from "./WalletContext";
+export type { WalletMode } from "./WalletContext";
