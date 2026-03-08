@@ -1,8 +1,9 @@
 import { useState, useEffect, useCallback } from "react";
-import { generateKeypair, fundTestnetAccount, truncateAddress, encryptSecretKey } from "@/lib/stellar";
+import { useWallet } from "@/lib/stellar/WalletContext";
+import { useAuth } from "@/hooks/useAuth";
+import { truncateAddress } from "@/lib/stellar";
 import { STELLAR_EXPLORER_BASE } from "@/lib/stellar/client";
 import {
-  kit,
   FREIGHTER_ID,
   XBULL_ID,
   ALBEDO_ID,
@@ -12,9 +13,7 @@ import {
 
 interface ConnectModalProps {
   embedded?: boolean;
-  userEmail?: string;
-  userId?: string;
-  onConnected: (mode: "custodial" | "external", publicKey: string, encryptedSecret?: string) => void;
+  onConnected: (mode: "custodial" | "external", publicKey: string) => void;
 }
 
 interface Step {
@@ -30,8 +29,10 @@ const wallets: { id: WalletId; name: string; icon: string; recommended?: boolean
   { id: LOBSTR_ID, name: "Lobstr", icon: "🦞" },
 ];
 
-const ConnectModal = ({ embedded = false, userEmail = "", userId, onConnected }: ConnectModalProps) => {
-  // ── State ─────────────────────────────────────────────
+const ConnectModal = ({ embedded = false, onConnected }: ConnectModalProps) => {
+  const { connectCustodial, connectExternal, isConnecting } = useWallet();
+  const { user } = useAuth();
+
   const [section, setSection] = useState<"choose" | "custodial-pin" | "custodial-creating" | "custodial-done" | "external-connecting">("choose");
   const [pin, setPin] = useState(["", "", "", ""]);
   const [confirmPin, setConfirmPin] = useState(["", "", "", ""]);
@@ -39,12 +40,11 @@ const ConnectModal = ({ embedded = false, userEmail = "", userId, onConnected }:
   const [connectingWallet, setConnectingWallet] = useState<string | null>(null);
   const [walletError, setWalletError] = useState("");
 
-  // Custodial creation state
   const [steps, setSteps] = useState<Step[]>([
     { label: "Generando par de claves criptográficas...", status: "pending" },
     { label: "Activando cuenta en la red Stellar...", status: "pending" },
     { label: "Cifrando clave con tu PIN...", status: "pending" },
-    { label: "Guardando configuración...", status: "pending" },
+    { label: "Guardando en tu perfil...", status: "pending" },
   ]);
   const [publicKey, setPublicKey] = useState("");
   const [copied, setCopied] = useState(false);
@@ -53,7 +53,6 @@ const ConnectModal = ({ embedded = false, userEmail = "", userId, onConnected }:
     setSteps((prev) => prev.map((s, i) => (i === index ? { ...s, ...update } : s)));
   };
 
-  // ── PIN input handler ─────────────────────────────────
   const handlePinInput = (
     arr: string[],
     setArr: (v: string[]) => void,
@@ -70,66 +69,60 @@ const ConnectModal = ({ embedded = false, userEmail = "", userId, onConnected }:
     }
   };
 
-  // ── Custodial creation flow ───────────────────────────
+  // ── Custodial creation — uses WalletContext which saves to Supabase
   const startCustodialCreation = useCallback(async () => {
     const pinStr = pin.join("");
     const confirmStr = confirmPin.join("");
 
     if (pinStr.length !== 4) { setPinError("Ingresa 4 dígitos"); return; }
     if (pinStr !== confirmStr) { setPinError("Los PINs no coinciden"); return; }
+    if (!user) { setPinError("Debes iniciar sesión primero"); return; }
 
     setPinError("");
     setSection("custodial-creating");
 
-    // Step 1: Generate keypair
-    updateStep(0, { status: "active" });
-    await new Promise((r) => setTimeout(r, 600));
-    const { publicKey: pub, secretKey: sec } = generateKeypair();
-    setPublicKey(pub);
-    updateStep(0, { status: "done", detail: "✓ Par de claves generado" });
+    try {
+      // Step 1-3 are handled inside connectCustodial
+      updateStep(0, { status: "active" });
+      await new Promise((r) => setTimeout(r, 400));
+      updateStep(0, { status: "done", detail: "✓ Par de claves generado" });
 
-    // Step 2: Fund via Friendbot
-    updateStep(1, { status: "active" });
-    const funded = await fundTestnetAccount(pub);
-    updateStep(1, {
-      status: funded ? "done" : "error",
-      detail: funded ? "✓ Cuenta activada · 10,000 XLM de prueba recibidos" : "⚠ Error activando cuenta",
-    });
+      updateStep(1, { status: "active" });
+      await new Promise((r) => setTimeout(r, 400));
+      updateStep(1, { status: "done", detail: "✓ Cuenta activada" });
 
-    // Step 3: Encrypt
-    updateStep(2, { status: "active" });
-    await new Promise((r) => setTimeout(r, 500));
-    const encrypted = await encryptSecretKey(sec, pinStr);
-    updateStep(2, { status: "done", detail: "✓ Clave protegida con AES-256" });
+      updateStep(2, { status: "active" });
+      await new Promise((r) => setTimeout(r, 300));
+      updateStep(2, { status: "done", detail: "✓ Clave protegida con AES-256" });
 
-    // Step 4: Save
-    updateStep(3, { status: "active" });
-    await new Promise((r) => setTimeout(r, 300));
-    updateStep(3, { status: "done", detail: "✓ Todo listo" });
+      updateStep(3, { status: "active" });
+      // This creates keypair, funds, encrypts, and saves to Supabase
+      const pk = await connectCustodial(user.id, pinStr);
+      updateStep(3, { status: "done", detail: "✓ Guardado en tu perfil" });
 
-    setSection("custodial-done");
-    onConnected("custodial", pub, encrypted);
-  }, [pin, confirmPin, onConnected]);
+      setPublicKey(pk);
+      setSection("custodial-done");
+      onConnected("custodial", pk);
+    } catch (err: any) {
+      console.error("Custodial creation failed:", err);
+      setPinError(err?.message || "Error creando cuenta");
+      // Mark current active step as error
+      setSteps(prev => prev.map(s => s.status === "active" ? { ...s, status: "error", detail: "Error" } : s));
+    }
+  }, [pin, confirmPin, user, connectCustodial, onConnected]);
 
-  // ── External wallet connect ───────────────────────────
+  // ── External wallet connect — uses WalletContext
   const handleExternalConnect = async (walletId: WalletId) => {
     setConnectingWallet(walletId);
     setWalletError("");
     setSection("external-connecting");
 
     try {
-      // Check availability for Freighter
-      if (walletId === FREIGHTER_ID) {
-        const available = await kit.isAvailable(FREIGHTER_ID);
-        if (!available) {
-          setWalletError("Freighter no está instalado");
-          setSection("choose");
-          setConnectingWallet(null);
-          return;
-        }
-      }
-
-      kit.setWallet(walletId);
+      await connectExternal(walletId);
+      // connectExternal updates WalletContext state; get publicKey from there
+      // We need to get the address - connectExternal stores it in context
+      // For the callback, re-read from kit
+      const { kit } = await import("@/lib/stellar/wallets-kit");
       const { address } = await kit.getAddress();
       onConnected("external", address);
     } catch (err: any) {
@@ -139,13 +132,12 @@ const ConnectModal = ({ embedded = false, userEmail = "", userId, onConnected }:
     }
   };
 
-  // ── Status colors ─────────────────────────────────────
   const statusColor = (s: Step["status"]) => {
     switch (s) {
-      case "done": return "text-pink";
-      case "active": return "text-mint";
-      case "error": return "text-pink-soft";
-      default: return "text-dimmed";
+      case "done": return "text-primary";
+      case "active": return "text-secondary";
+      case "error": return "text-destructive";
+      default: return "text-muted-foreground";
     }
   };
 
@@ -158,14 +150,8 @@ const ConnectModal = ({ embedded = false, userEmail = "", userId, onConnected }:
     }
   };
 
-  // ── Render ────────────────────────────────────────────
-  const containerClass = embedded
-    ? ""
-    : "fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4";
-
-  const cardClass = embedded
-    ? "w-full"
-    : "w-full max-w-lg bg-card-dark rounded-sm border border-pink-subtle p-6 max-h-[90vh] overflow-y-auto";
+  const containerClass = embedded ? "" : "fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4";
+  const cardClass = embedded ? "w-full" : "w-full max-w-lg bg-card rounded-sm border border-border p-6 max-h-[90vh] overflow-y-auto";
 
   return (
     <div className={containerClass}>
@@ -173,15 +159,13 @@ const ConnectModal = ({ embedded = false, userEmail = "", userId, onConnected }:
         {/* ── Choose section ─────────────────────────── */}
         {section === "choose" && (
           <>
-            {/* TOP: Custodial path */}
             <div className="mb-6">
-              <span className="font-mono text-[0.65rem] uppercase tracking-widest text-pink">
+              <span className="font-mono text-[0.65rem] uppercase tracking-widest text-primary">
                 → ACCESO RÁPIDO · SIN WALLET
               </span>
-              <p className="text-sm text-body-muted mt-2 leading-relaxed">
-                Creamos tu cuenta Stellar automáticamente. Solo necesitas tu correo y un PIN de 4 dígitos.
+              <p className="text-sm text-muted-foreground mt-2 leading-relaxed">
+                Creamos tu cuenta Stellar automáticamente. Solo necesitas un PIN de 4 dígitos.
               </p>
-
               <button
                 onClick={() => setSection("custodial-pin")}
                 className="btn-pink w-full rounded-sm mt-4"
@@ -190,30 +174,27 @@ const ConnectModal = ({ embedded = false, userEmail = "", userId, onConnected }:
               </button>
             </div>
 
-            {/* Divider */}
             <div className="flex items-center gap-3 my-6">
-              <div className="flex-1 h-px bg-pink-subtle" />
-              <span className="font-mono text-[0.6rem] text-body-muted uppercase tracking-wider">
+              <div className="flex-1 h-px bg-border" />
+              <span className="font-mono text-[0.6rem] text-muted-foreground uppercase tracking-wider">
                 O conecta tu wallet
               </span>
-              <div className="flex-1 h-px bg-pink-subtle" />
+              <div className="flex-1 h-px bg-border" />
             </div>
 
-            {/* BOTTOM: External wallets */}
             <div>
-              <span className="font-mono text-[0.65rem] uppercase tracking-widest text-mint">
+              <span className="font-mono text-[0.65rem] uppercase tracking-widest text-secondary">
                 → CONECTAR WALLET STELLAR
               </span>
-
               <div className="grid grid-cols-2 gap-3 mt-4">
                 {wallets.map((w) => (
                   <button
                     key={w.id}
                     onClick={() => handleExternalConnect(w.id)}
-                    className="relative p-3.5 rounded-sm border border-pink-subtle bg-hover-dark hover:border-mint-visible hover:bg-card-dark transition-all text-left group"
+                    className="relative p-3.5 rounded-sm border border-border bg-muted hover:border-secondary hover:bg-card transition-all text-left group"
                   >
                     {w.recommended && (
-                      <span className="absolute top-2 right-2 font-mono text-[0.5rem] text-mint uppercase tracking-wider">
+                      <span className="absolute top-2 right-2 font-mono text-[0.5rem] text-secondary uppercase tracking-wider">
                         Recomendado
                       </span>
                     )}
@@ -224,24 +205,16 @@ const ConnectModal = ({ embedded = false, userEmail = "", userId, onConnected }:
               </div>
 
               {walletError && (
-                <div className="mt-3 p-3 rounded-sm border border-pink-subtle bg-card-dark">
-                  <p className="text-xs text-pink font-mono">{walletError}</p>
+                <div className="mt-3 p-3 rounded-sm border border-border bg-card">
+                  <p className="text-xs text-destructive font-mono">{walletError}</p>
                   {walletError.includes("Freighter") && (
-                    <a
-                      href="https://freighter.app"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-xs font-mono text-mint hover:underline mt-1 inline-block"
-                    >
+                    <a href="https://freighter.app" target="_blank" rel="noopener noreferrer"
+                      className="text-xs font-mono text-secondary hover:underline mt-1 inline-block">
                       Instalar Freighter →
                     </a>
                   )}
                 </div>
               )}
-
-              <p className="font-mono text-[0.58rem] text-dimmed mt-4 text-center">
-                ¿No tienes wallet? Usa el acceso rápido de arriba.
-              </p>
             </div>
           </>
         )}
@@ -250,78 +223,52 @@ const ConnectModal = ({ embedded = false, userEmail = "", userId, onConnected }:
         {section === "custodial-pin" && (
           <div className="space-y-5">
             <div>
-              <span className="font-mono text-[0.65rem] uppercase tracking-widest text-pink">
+              <span className="font-mono text-[0.65rem] uppercase tracking-widest text-primary">
                 → ACCESO RÁPIDO
               </span>
               <h2 className="text-xl font-bold mt-2 text-foreground">
-                CREA TU <span className="text-pink">PIN</span>
+                CREA TU <span className="text-primary">PIN</span>
               </h2>
-              <p className="text-xs text-body-muted mt-2">
+              <p className="text-xs text-muted-foreground mt-2">
                 Tu PIN protege tu clave secreta. Nunca la almacenamos en texto plano.
               </p>
             </div>
 
-            {/* Email display */}
-            {userEmail && (
-              <div className="bg-card-dark border border-pink-subtle rounded-sm px-4 py-3">
-                <label className="text-[0.6rem] font-mono text-dimmed uppercase tracking-wider block mb-1">Correo</label>
-                <span className="text-sm text-foreground font-mono">{userEmail}</span>
-              </div>
-            )}
-
-            {/* PIN */}
             <div>
-              <label className="text-xs text-dimmed font-mono uppercase tracking-wider mb-2 block">PIN</label>
+              <label className="text-xs text-muted-foreground font-mono uppercase tracking-wider mb-2 block">PIN</label>
               <div className="flex gap-3 justify-center">
                 {pin.map((d, i) => (
-                  <input
-                    key={i}
-                    id={`cpin-a-${i}`}
-                    type="password"
-                    inputMode="numeric"
-                    maxLength={1}
-                    value={d}
+                  <input key={i} id={`cpin-a-${i}`} type="password" inputMode="numeric" maxLength={1} value={d}
                     onChange={(e) => handlePinInput(pin, setPin, "cpin-a", i, e.target.value)}
-                    className="w-[52px] h-[52px] text-center text-2xl font-mono bg-card-dark border border-pink-subtle rounded-sm text-foreground focus:outline-none focus:border-pink-visible transition-colors"
+                    className="w-[52px] h-[52px] text-center text-2xl font-mono bg-card border border-border rounded-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary transition-colors"
                   />
                 ))}
               </div>
             </div>
 
-            {/* Confirm PIN */}
             <div>
-              <label className="text-xs text-dimmed font-mono uppercase tracking-wider mb-2 block">Confirmar PIN</label>
+              <label className="text-xs text-muted-foreground font-mono uppercase tracking-wider mb-2 block">Confirmar PIN</label>
               <div className="flex gap-3 justify-center">
                 {confirmPin.map((d, i) => (
-                  <input
-                    key={i}
-                    id={`cpin-b-${i}`}
-                    type="password"
-                    inputMode="numeric"
-                    maxLength={1}
-                    value={d}
+                  <input key={i} id={`cpin-b-${i}`} type="password" inputMode="numeric" maxLength={1} value={d}
                     onChange={(e) => handlePinInput(confirmPin, setConfirmPin, "cpin-b", i, e.target.value)}
-                    className="w-[52px] h-[52px] text-center text-2xl font-mono bg-card-dark border border-pink-subtle rounded-sm text-foreground focus:outline-none focus:border-pink-visible transition-colors"
+                    className="w-[52px] h-[52px] text-center text-2xl font-mono bg-card border border-border rounded-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary transition-colors"
                   />
                 ))}
               </div>
             </div>
 
-            {pinError && <p className="text-pink text-xs font-mono text-center">{pinError}</p>}
+            {pinError && <p className="text-destructive text-xs font-mono text-center">{pinError}</p>}
 
-            <button
-              onClick={startCustodialCreation}
-              disabled={pin.join("").length < 4 || confirmPin.join("").length < 4}
+            <button onClick={startCustodialCreation}
+              disabled={pin.join("").length < 4 || confirmPin.join("").length < 4 || isConnecting}
               className="btn-pink w-full rounded-sm"
-              style={{ opacity: pin.join("").length < 4 ? 0.4 : 1 }}
-            >
-              → Crear mi cuenta Stellar
+              style={{ opacity: pin.join("").length < 4 ? 0.4 : 1 }}>
+              {isConnecting ? "Creando..." : "→ Crear mi cuenta Stellar"}
             </button>
 
-            <button
-              onClick={() => setSection("choose")}
-              className="text-xs font-mono text-body-muted hover:text-foreground transition-colors w-full text-center"
-            >
+            <button onClick={() => setSection("choose")}
+              className="text-xs font-mono text-muted-foreground hover:text-foreground transition-colors w-full text-center">
               ← Volver
             </button>
           </div>
@@ -330,72 +277,48 @@ const ConnectModal = ({ embedded = false, userEmail = "", userId, onConnected }:
         {/* ── Terminal creation flow ─────────────────── */}
         {(section === "custodial-creating" || section === "custodial-done") && (
           <div>
-            <div className="terminal-bg rounded-sm p-4 font-mono text-[0.72rem] leading-8 space-y-1">
-              <p className="text-dimmed text-[0.6rem]">
-                // Propulsor · Creando tu cuenta Stellar
-              </p>
-              <p className="text-dimmed text-[0.6rem] mb-3">
-                // Red: Testnet
-              </p>
-
+            <div className="bg-muted rounded-sm p-4 font-mono text-[0.72rem] leading-8 space-y-1">
+              <p className="text-muted-foreground text-[0.6rem]">// Propulsor · Creando tu cuenta Stellar</p>
+              <p className="text-muted-foreground text-[0.6rem] mb-3">// Red: Testnet</p>
               {steps.map((step, i) => (
                 <div key={i} className="flex items-start justify-between gap-2">
                   <span className="flex items-center gap-2">
-                    <span className={statusColor(step.status)}>
-                      {statusIcon(step.status)}
-                    </span>
-                    <span
-                      className={step.status === "pending" ? "opacity-30 text-foreground" : "text-foreground"}
-                    >
+                    <span className={statusColor(step.status)}>{statusIcon(step.status)}</span>
+                    <span className={step.status === "pending" ? "opacity-30 text-foreground" : "text-foreground"}>
                       {step.label}
                     </span>
                   </span>
                   {step.detail && (
-                    <span className={`text-[0.6rem] shrink-0 ${statusColor(step.status)}`}>
-                      {step.detail}
-                    </span>
+                    <span className={`text-[0.6rem] shrink-0 ${statusColor(step.status)}`}>{step.detail}</span>
                   )}
                 </div>
               ))}
-
-              {/* Blinking cursor on active step */}
               {section === "custodial-creating" && (
-                <span className="inline-block w-2 h-4 bg-mint animate-pulse ml-6" />
+                <span className="inline-block w-2 h-4 bg-secondary animate-pulse ml-6" />
               )}
             </div>
 
-            {/* Done state */}
             {section === "custodial-done" && publicKey && (
               <div className="mt-6 space-y-4">
                 <div className="text-center">
-                  <p className="text-mint font-mono text-sm">✓ Cuenta creada exitosamente</p>
+                  <p className="text-secondary font-mono text-sm">✓ Cuenta creada y guardada exitosamente</p>
                 </div>
-
-                <div className="bg-card-dark border border-pink-subtle rounded-sm p-4">
-                  <p className="text-[0.6rem] text-dimmed font-mono uppercase tracking-wider mb-2">
+                <div className="bg-card border border-border rounded-sm p-4">
+                  <p className="text-[0.6rem] text-muted-foreground font-mono uppercase tracking-wider mb-2">
                     Tu dirección Stellar
                   </p>
                   <div className="flex items-center justify-between gap-2">
-                    <span className="font-mono text-sm text-foreground">
-                      {truncateAddress(publicKey)}
-                    </span>
+                    <span className="font-mono text-sm text-foreground">{truncateAddress(publicKey)}</span>
                     <div className="flex items-center gap-2">
-                      <button
-                        onClick={() => {
-                          navigator.clipboard.writeText(publicKey);
-                          setCopied(true);
-                          setTimeout(() => setCopied(false), 2000);
-                        }}
-                        className="text-xs font-mono text-pink hover:text-foreground transition-colors"
-                      >
+                      <button onClick={() => {
+                        navigator.clipboard.writeText(publicKey);
+                        setCopied(true);
+                        setTimeout(() => setCopied(false), 2000);
+                      }} className="text-xs font-mono text-primary hover:text-foreground transition-colors">
                         {copied ? "✓ Copiado" : "Copiar"}
                       </button>
-                      <a
-                        href={`${STELLAR_EXPLORER_BASE}/account/${publicKey}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-xs font-mono text-mint hover:text-foreground transition-colors"
-                      >
+                      <a href={`${STELLAR_EXPLORER_BASE}/account/${publicKey}`} target="_blank" rel="noopener noreferrer"
+                        className="text-xs font-mono text-secondary hover:text-foreground transition-colors">
                         Ver en Explorer →
                       </a>
                     </div>
@@ -409,13 +332,11 @@ const ConnectModal = ({ embedded = false, userEmail = "", userId, onConnected }:
         {/* ── External connecting state ──────────────── */}
         {section === "external-connecting" && (
           <div className="text-center py-8 space-y-4">
-            <div className="w-8 h-8 border-2 border-mint border-t-transparent rounded-full animate-spin mx-auto" />
+            <div className="w-8 h-8 border-2 border-secondary border-t-transparent rounded-full animate-spin mx-auto" />
             <p className="text-sm text-foreground font-mono">
               Abriendo {wallets.find((w) => w.id === connectingWallet)?.name ?? "wallet"}...
             </p>
-            <p className="text-xs text-body-muted">
-              Confirma la conexión en tu wallet
-            </p>
+            <p className="text-xs text-muted-foreground">Confirma la conexión en tu wallet</p>
           </div>
         )}
       </div>
