@@ -1,6 +1,6 @@
 import * as StellarSdk from "@stellar/stellar-sdk";
 import {
-  sorobanServer,
+  getSorobanServer,
   NETWORK_PASSPHRASE,
   SPLIT_CONTRACT_ID,
   VAULT_CONTRACT_ID,
