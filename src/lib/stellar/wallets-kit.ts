@@ -89,27 +89,23 @@ function createGenericExtensionModule(id: WalletId, name: string, icon: string):
   };
 }
 
-// ── Albedo Module (web-based, always available) ─────────────
+// ── Albedo Module (web-based) ───────────────────────────────
 function createAlbedoModule(): WalletModule {
   return {
     id: ALBEDO_ID,
     name: "Albedo",
     icon: "🌅",
     async isAvailable() {
-      return true; // Albedo is web-based, always available
+      return true;
     },
     async getAddress() {
-      // Albedo uses popup — dynamic import
-      const albedo = await import("@albedo-link/intent").catch(() => null);
-      if (!albedo) throw new Error("Albedo no disponible");
-      const result = await albedo.default.publicKey({});
-      return result.pubkey;
+      // Albedo uses a popup window — open it directly
+      const w = window.open("https://albedo.link/intent/public-key", "_blank", "width=500,height=600");
+      if (!w) throw new Error("Albedo popup bloqueado");
+      throw new Error("Albedo requiere interacción manual en albedo.link");
     },
-    async signTransaction(txXdr) {
-      const albedo = await import("@albedo-link/intent").catch(() => null);
-      if (!albedo) throw new Error("Albedo no disponible");
-      const result = await albedo.default.tx({ xdr: txXdr });
-      return result.signed_envelope_xdr;
+    async signTransaction(_txXdr) {
+      throw new Error("Albedo signing no soportado en este entorno");
     },
   };
 }
