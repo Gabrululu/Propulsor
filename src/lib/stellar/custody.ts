@@ -35,13 +35,13 @@ export async function createCustodialAccount(
 
   // 4. Save to Supabase (NEVER store plaintext secret)
   // Note: using upsert pattern since profile may already exist
-  const { error } = await supabase.from("users_profile").upsert(
+  const { error } = await supabase.from("users_profile" as any).upsert(
     {
       id: userId,
       stellar_public_key: publicKey,
       stellar_secret_encrypted: encrypted,
       stellar_funded: funded,
-    },
+    } as any,
     { onConflict: "id" }
   );
 
