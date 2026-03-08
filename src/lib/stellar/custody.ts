@@ -85,7 +85,7 @@ export async function loadEncryptedSecret(
   userId: string
 ): Promise<string | null> {
   const { data, error } = await supabase
-    .from("users_profile")
+    .from("users_profile" as any)
     .select("stellar_secret_encrypted")
     .eq("id", userId)
     .single();
