@@ -80,7 +80,7 @@ const Onboarding = () => {
 
       const { error } = await supabase
         .from("users_profile")
-        .upsert(profileData, { onConflict: "id" });
+        .upsert(profileData as any, { onConflict: "id" });
 
       if (error) {
         console.error("Failed to save profile:", error.message);
