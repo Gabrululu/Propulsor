@@ -4,7 +4,7 @@ import PercentageSlider from "@/components/PercentageSlider";
 import TerminalBlock from "@/components/TerminalBlock";
 import SpeakerButton from "@/components/voice/SpeakerButton";
 import SoundWaveBars from "@/components/voice/SoundWaveBars";
-import StellarAccountSetup from "@/components/StellarAccountSetup";
+import ConnectModal from "@/components/stellar/ConnectModal";
 import { useVoice } from "@/hooks/useVoice";
 import {
   ONBOARDING_WELCOME,
@@ -20,7 +20,7 @@ const profileTypes = [
 ];
 
 const Onboarding = () => {
-  // Steps: 0=welcome, 1=profile, 2=stellar account, 3=vaults, deploying, done
+  // Steps: 0=welcome, 1=profile, 2=connect wallet, 3=vaults, deploying, done
   const [step, setStep] = useState(0);
   const [name, setName] = useState("");
   const [profileType, setProfileType] = useState("");
@@ -54,10 +54,10 @@ const Onboarding = () => {
     if (desc) speak(desc);
   };
 
-  const handleStellarComplete = (pubKey: string, _encryptedSecret: string) => {
-    setStellarPublicKey(pubKey);
-    // Auto-advance to vaults step
-    setTimeout(() => setStep(3), 600);
+  const handleWalletConnected = (mode: "custodial" | "external", publicKey: string) => {
+    setStellarPublicKey(publicKey);
+    // Auto-advance to vaults step after a short delay
+    setTimeout(() => setStep(3), 800);
   };
 
   const handleDeploy = () => {
@@ -101,17 +101,9 @@ const Onboarding = () => {
             <p className="text-body-muted text-sm mb-8 leading-relaxed">
               Propulsor separa tu dinero automáticamente en bóvedas inteligentes. Sin banco. Sin permiso. Solo tú y tu código.
             </p>
-            <div className="space-y-3">
-              <button onClick={() => setStep(1)} className="btn-pink w-full rounded-sm text-center">
-                Crear cuenta nueva
-              </button>
-              <button onClick={() => {}} className="btn-outline-pink w-full rounded-sm text-center">
-                Tengo wallet Stellar
-              </button>
-            </div>
-            <p className="text-dimmed text-xs font-mono mt-4 text-center">
-              La integración con wallets Stellar estará disponible próximamente.
-            </p>
+            <button onClick={() => setStep(1)} className="btn-pink w-full rounded-sm text-center">
+              Empezar →
+            </button>
           </div>
         )}
 
@@ -165,13 +157,21 @@ const Onboarding = () => {
           </div>
         )}
 
-        {/* Step 2: Stellar Account Creation */}
+        {/* Step 2: Connect Wallet (dual path) */}
         {step === 2 && (
           <div>
-            <div className="flex gap-2 items-center mb-2">
-              <span className="font-mono text-xs text-dimmed tracking-widest">PASO 3 DE {totalSteps}</span>
-            </div>
-            <StellarAccountSetup onComplete={handleStellarComplete} />
+            <span className="font-mono text-xs text-dimmed tracking-widest">PASO 3 DE {totalSteps}</span>
+            <h1 className="text-2xl font-bold mt-2 mb-6">
+              <span className="text-foreground">ELIGE CÓMO </span>
+              <span className="text-pink">CONECTARTE</span>
+            </h1>
+            <p className="text-body-muted text-sm mb-6 leading-relaxed">
+              Puedes empezar sin wallet — nosotros creamos tu cuenta Stellar.
+            </p>
+            <ConnectModal
+              embedded={true}
+              onConnected={handleWalletConnected}
+            />
           </div>
         )}
 
