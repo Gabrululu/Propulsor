@@ -238,6 +238,7 @@ const Bovedas = () => {
                 colorVariant={v.colorVariant}
                 onLock={() => setLockModal({ vaultId: v.vault_id, name: v.name })}
                 onRelease={() => setReleaseModal({ vaultId: v.vault_id, name: v.name })}
+                onAdd={v.isLocked ? () => setAddModal({ vaultId: v.vault_id, name: v.name }) : undefined}
               />
             ))}
           </div>
