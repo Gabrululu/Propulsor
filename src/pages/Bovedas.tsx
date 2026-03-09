@@ -46,6 +46,13 @@ const Bovedas = () => {
   const [locking, setLocking] = useState(false);
   const [lockError, setLockError] = useState("");
 
+  // Add funds modal state
+  const [addModal, setAddModal] = useState<{ vaultId: number; name: string } | null>(null);
+  const [addAmount, setAddAmount] = useState("");
+  const [addPin, setAddPin] = useState("");
+  const [adding, setAdding] = useState(false);
+  const [addError, setAddError] = useState("");
+
   const isCustodial = mode === "custodial";
 
   const loadVaults = useCallback(async () => {
