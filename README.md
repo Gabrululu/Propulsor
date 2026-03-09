@@ -290,9 +290,56 @@ Reglas
 | Simulador interactivo | ✅ Completo |
 | Stellar SDK layer | ✅ Completo |
 | ElevenLabs voice | ✅ Completo |
-| Contratos Soroban (Rust) | 🔧 Deploy local |
+| Contratos Soroban (Rust) | ✅ Deployed Testnet |
 | SEP-24 Anchor real | 🔜 Post-hackathon |
 | Stellar Mainnet | 🔜 Post-hackathon |
+
+---
+
+## Contratos Desplegados (Stellar Testnet)
+
+### SplitProtocol
+
+| Campo | Valor |
+|---|---|
+| **Contract ID** | `CCRH4EPUVIPESWYWOWPQ2QK3XN6KBR3RY6UFK36A4MXKKXIFH6ONRTVY` |
+| **Wasm Hash** | `ea57fb45e7dd0e5865d9512b50683d22b7076f1eba36c24dffc7b09077533c1e` |
+| **Deploy Tx** | [`d11b2ad6…0834ddc7`](https://stellar.expert/explorer/testnet/tx/d11b2ad60355df81a03a2a0d16c626fe016f0e1265f31d280292549b0834ddc7) |
+| **Lab** | [Ver en Stellar Lab](https://lab.stellar.org/r/testnet/contract/CCRH4EPUVIPESWYWOWPQ2QK3XN6KBR3RY6UFK36A4MXKKXIFH6ONRTVY) |
+
+### TimeVault
+
+| Campo | Valor |
+|---|---|
+| **Contract ID** | `CC73UGT72A2MOZOSK6WFWMMIL32OJPJSPKEBFNBLK2GZJYNORERTSSWX` |
+| **Wasm Hash** | `cf3edcf33cdbbfbe762d39de437b03d711e7d320510c7029cf593f5ae50bc72d` |
+| **Deploy Tx** | [`011aaf17…3651d6ed`](https://stellar.expert/explorer/testnet/tx/011aaf17f4993bb9242a84c4d983e975d260313ebd9434a354f2b8cd3651d6ed) |
+| **Lab** | [Ver en Stellar Lab](https://lab.stellar.org/r/testnet/contract/CC73UGT72A2MOZOSK6WFWMMIL32OJPJSPKEBFNBLK2GZJYNORERTSSWX) |
+
+### Verificación en Testnet
+
+```bash
+# set_rules — configurar 60/30/10
+stellar contract invoke \
+  --source-account deployer \
+  --id CCRH4EPUVIPESWYWOWPQ2QK3XN6KBR3RY6UFK36A4MXKKXIFH6ONRTVY \
+  --network testnet \
+  -- set_rules \
+  --user $(stellar keys public-key deployer) \
+  --rules '[{"vault_id":0,"percentage":60},{"vault_id":1,"percentage":30},{"vault_id":2,"percentage":10}]'
+# ✅ Event: rules_set — 3 reglas
+
+# execute_split — dividir 1,000,000,000 stroops
+stellar contract invoke \
+  --source-account deployer \
+  --id CCRH4EPUVIPESWYWOWPQ2QK3XN6KBR3RY6UFK36A4MXKKXIFH6ONRTVY \
+  --network testnet \
+  -- execute_split \
+  --user $(stellar keys public-key deployer) \
+  --income 1000000000
+# ✅ Event: split_done
+# Resultado: [vault_0: 600M, vault_1: 300M, vault_2: 100M]
+```
 
 ---
 
