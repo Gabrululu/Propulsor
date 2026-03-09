@@ -82,7 +82,7 @@ const Auth = () => {
     setWalletError("");
 
     try {
-      // Check availability for all wallets first
+      // Check availability
       const available = await kit.isAvailable(walletId);
       if (!available) {
         const url = walletInstallUrls[walletId];
@@ -98,8 +98,10 @@ const Auth = () => {
         return;
       }
 
+      // Request access — this opens the wallet popup for user approval
       kit.setWallet(walletId);
-      const { address } = await kit.getAddress();
+      const { address } = await kit.requestAccess();
+      if (!address) throw new Error("No se obtuvo dirección de la wallet");
 
       // Use the Stellar public key as a deterministic email+password for Supabase auth
       const syntheticEmail = `${address.slice(0, 16).toLowerCase()}@stellar.propulsor.app`;
