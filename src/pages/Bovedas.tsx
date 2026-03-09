@@ -46,6 +46,13 @@ const Bovedas = () => {
   const [locking, setLocking] = useState(false);
   const [lockError, setLockError] = useState("");
 
+  // Add funds modal state
+  const [addModal, setAddModal] = useState<{ vaultId: number; name: string } | null>(null);
+  const [addAmount, setAddAmount] = useState("");
+  const [addPin, setAddPin] = useState("");
+  const [adding, setAdding] = useState(false);
+  const [addError, setAddError] = useState("");
+
   const isCustodial = mode === "custodial";
 
   const loadVaults = useCallback(async () => {
@@ -168,6 +175,34 @@ const Bovedas = () => {
     }
   };
 
+  // ── Add to lock ──────────────────────────────────────────
+  const handleAddToLock = async () => {
+    if (!addModal) return;
+    const usdc = parseFloat(addAmount);
+    if (!usdc || usdc <= 0) { setAddError("Ingresa un monto válido."); return; }
+    if (isCustodial && addPin.length < 4) return;
+    setAdding(true);
+    setAddError("");
+    try {
+      const txHash = await contracts.addToLock(
+        addModal.vaultId,
+        usdcToStroops(usdc),
+        isCustodial ? addPin : undefined
+      );
+      const shortHash = `${txHash.slice(0, 8)}...${txHash.slice(-4)}`;
+      toast({ title: `✓ $${usdc.toFixed(2)} agregados`, description: `Tx: ${shortHash}` });
+      setAddModal(null);
+      setAddAmount("");
+      setAddPin("");
+      await loadVaults();
+    } catch (err: unknown) {
+      setAddError("Error al conectar con la red. Intenta de nuevo.");
+      console.error(err);
+    } finally {
+      setAdding(false);
+    }
+  };
+
   return (
     <DashboardLayout>
       <div className="p-6 md:p-10 max-w-5xl pb-24 md:pb-10">
@@ -203,6 +238,7 @@ const Bovedas = () => {
                 colorVariant={v.colorVariant}
                 onLock={() => setLockModal({ vaultId: v.vault_id, name: v.name })}
                 onRelease={() => setReleaseModal({ vaultId: v.vault_id, name: v.name })}
+                onAdd={v.isLocked ? () => setAddModal({ vaultId: v.vault_id, name: v.name }) : undefined}
               />
             ))}
           </div>
@@ -326,6 +362,69 @@ const Bovedas = () => {
               </>
             ) : (
               <p className="font-mono text-xs text-pink animate-pulse py-4">Bloqueando bóveda en Soroban...</p>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ── Add Funds Modal ───────────────────────────────── */}
+      {addModal && (
+        <div className="fixed inset-0 bg-black/60 flex items-end sm:items-center justify-center z-50 p-4">
+          <div className="bg-card-dark border border-pink-subtle rounded-sm w-full max-w-md p-6">
+            <h3 className="font-bold text-foreground mb-1">Agregar fondos</h3>
+            <p className="text-body-muted text-xs font-mono mb-5">
+              {addModal.name} · Los fondos se suman a tu bloqueo actual.
+            </p>
+
+            {!adding ? (
+              <>
+                <label className="block text-xs font-mono text-muted-foreground uppercase tracking-widest mb-1">
+                  Monto a agregar (USDC)
+                </label>
+                <input
+                  type="number"
+                  min="0.01"
+                  step="0.01"
+                  value={addAmount}
+                  onChange={(e) => setAddAmount(e.target.value)}
+                  className="w-full bg-card border border-border rounded-sm px-4 py-3 text-foreground text-sm font-mono focus:outline-none focus:ring-1 focus:ring-primary mb-4"
+                  placeholder="10.00"
+                />
+
+                {isCustodial && (
+                  <>
+                    <label className="block text-xs font-mono text-muted-foreground uppercase tracking-widest mb-1">
+                      PIN de confirmación
+                    </label>
+                    <input
+                      type="password"
+                      inputMode="numeric"
+                      maxLength={4}
+                      value={addPin}
+                      onChange={(e) => setAddPin(e.target.value.replace(/\D/g, ""))}
+                      className="w-full bg-card border border-border rounded-sm px-4 py-3 text-foreground text-center text-xl tracking-[1rem] focus:outline-none focus:ring-1 focus:ring-primary mb-4"
+                      placeholder="••••"
+                    />
+                  </>
+                )}
+
+                {addError && <p className="text-xs font-mono text-dimmed mb-3">{addError}</p>}
+                <div className="flex gap-3">
+                  <button onClick={() => { setAddModal(null); setAddAmount(""); setAddPin(""); }} className="flex-1 btn-outline-pink text-xs py-2.5 rounded-sm">
+                    Cancelar
+                  </button>
+                  <button
+                    onClick={handleAddToLock}
+                    disabled={isCustodial && addPin.length < 4}
+                    className="flex-1 btn-pink text-xs py-2.5 rounded-sm"
+                    style={{ opacity: isCustodial && addPin.length < 4 ? 0.4 : 1 }}
+                  >
+                    Agregar →
+                  </button>
+                </div>
+              </>
+            ) : (
+              <p className="font-mono text-xs text-pink animate-pulse py-4">Agregando fondos en Soroban...</p>
             )}
           </div>
         </div>

@@ -14,6 +14,7 @@ interface VaultCardProps {
   colorVariant: "pink" | "mint" | "pink-soft";
   onLock?: () => void;
   onRelease?: () => void;
+  onAdd?: () => void;
 }
 
 const colorTextMap = {
@@ -35,6 +36,7 @@ const VaultCard = ({
   colorVariant,
   onLock,
   onRelease,
+  onAdd,
 }: VaultCardProps) => {
   const progress = goalAmount ? (balance / goalAmount) * 100 : percentage;
   const locked = isLocked && !canRelease;
@@ -106,13 +108,20 @@ const VaultCard = ({
 
       {/* Action buttons */}
       <div className="flex gap-2 mt-4">
-        {/* Depositar / Bloquear */}
+        {/* Bloquear / Agregar fondos */}
         {!locked && !canRelease ? (
           <button
             onClick={onLock}
             className="btn-pink text-xs py-2 px-4 rounded-sm flex-1"
           >
             Bloquear
+          </button>
+        ) : locked && onAdd ? (
+          <button
+            onClick={onAdd}
+            className="btn-pink text-xs py-2 px-4 rounded-sm flex-1"
+          >
+            + Agregar
           </button>
         ) : (
           <button className="btn-pink text-xs py-2 px-4 rounded-sm flex-1 opacity-40" disabled>
