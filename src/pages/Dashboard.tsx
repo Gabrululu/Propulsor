@@ -233,30 +233,56 @@ const Dashboard = () => {
 
         {/* Vault mini-cards */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
-          {VAULT_META.map((v, i) => (
-            <div
-              key={i}
-              className="bg-card-dark p-4 rounded-sm border border-pink-subtle"
-              style={{ borderLeft: `3px solid ${v.colorHex}` }}
-            >
-              <div className="flex items-center gap-2 mb-2">
-                <span>{v.icon}</span>
-                <span className="text-sm font-bold uppercase" style={{ color: v.colorHex }}>{v.name}</span>
+          {VAULT_META.map((v, i) => {
+            const rule = rules.find((r) => r.vault_id === i);
+            const pct = rule?.percentage ?? 0;
+            const lock = locks[i];
+            const canRelease = releaseFlags[i];
+            const isLocked = lock != null && !canRelease;
+
+            return (
+              <div
+                key={i}
+                className="bg-card-dark p-4 rounded-sm border border-pink-subtle"
+                style={{ borderLeft: `3px solid ${v.colorHex}` }}
+              >
+                <div className="flex items-center gap-2 mb-2">
+                  <span>{v.icon}</span>
+                  <span className="text-sm font-bold uppercase" style={{ color: v.colorHex }}>{v.name}</span>
+                  <span className="ml-auto text-xs font-mono text-body-muted">{pct}%</span>
+                </div>
+
+                {/* Lock / release status */}
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="font-mono text-xl font-bold text-foreground">
+                    {balancesLoading ? "..." : `$${vaultBalances[i].toFixed(2)}`}
+                  </span>
+                  {canRelease && (
+                    <span className="text-xs font-mono text-mint bg-deep px-1.5 py-0.5 rounded-sm animate-pulse">🔓 Lista</span>
+                  )}
+                  {isLocked && (
+                    <span className="text-xs font-mono text-body-muted bg-deep px-1.5 py-0.5 rounded-sm">🔒</span>
+                  )}
+                </div>
+
+                <div className="w-full h-1 bg-deep rounded-sm mt-2 overflow-hidden">
+                  <div
+                    className="h-full transition-all duration-700"
+                    style={{
+                      width: `${totalBalance > 0 ? (vaultBalances[i] / totalBalance) * 100 : 0}%`,
+                      backgroundColor: v.colorHex,
+                    }}
+                  />
+                </div>
+
+                {lock?.goal_amount && (
+                  <p className="text-xs font-mono text-dimmed mt-1">
+                    Meta: ${stroopsToUsdc(lock.goal_amount).toFixed(2)} · {((vaultBalances[i] / stroopsToUsdc(lock.goal_amount)) * 100).toFixed(0)}%
+                  </p>
+                )}
               </div>
-              <span className="font-mono text-xl font-bold text-foreground">
-                {balancesLoading ? "..." : `$${vaultBalances[i].toFixed(2)}`}
-              </span>
-              <div className="w-full h-1 bg-deep rounded-sm mt-2 overflow-hidden">
-                <div
-                  className="h-full transition-all duration-700"
-                  style={{
-                    width: `${totalBalance > 0 ? (vaultBalances[i] / totalBalance) * 100 : 0}%`,
-                    backgroundColor: v.colorHex,
-                  }}
-                />
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
 
         {/* Recent activity */}
