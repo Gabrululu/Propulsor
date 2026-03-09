@@ -57,8 +57,8 @@ export interface LockResult {
 
 // ── Helpers ──────────────────────────────────────────────────
 
-function rpcServer(): S.SorobanRpc.Server {
-  return new S.SorobanRpc.Server(SOROBAN_RPC_URL, { allowHttp: false });
+function rpcServer(): S.rpc.Server {
+  return new S.rpc.Server(SOROBAN_RPC_URL, { allowHttp: false });
 }
 
 function addressVal(pk: string): S.xdr.ScVal {
@@ -123,11 +123,11 @@ async function invoke(
     .build();
 
   const sim = await server.simulateTransaction(tx);
-  if (S.SorobanRpc.Api.isSimulationError(sim)) {
+  if (S.rpc.Api.isSimulationError(sim)) {
     throw new Error(`Simulación fallida: ${sim.error}`);
   }
 
-  const assembled = S.SorobanRpc.assembleTransaction(tx, sim).build();
+  const assembled = S.rpc.assembleTransaction(tx, sim).build();
 
   onProgress?.("Firmando con tu clave...");
   const signedXdr = await signFn(assembled.toXDR());
@@ -143,13 +143,13 @@ async function invoke(
   onProgress?.("Confirmando en el ledger...");
   let getResponse = await server.getTransaction(response.hash);
   let attempts = 0;
-  while (getResponse.status === S.SorobanRpc.Api.GetTransactionStatus.NOT_FOUND && attempts < 20) {
+  while (getResponse.status === S.rpc.Api.GetTransactionStatus.NOT_FOUND && attempts < 20) {
     await new Promise((r) => setTimeout(r, 1500));
     getResponse = await server.getTransaction(response.hash);
     attempts++;
   }
 
-  if (getResponse.status !== S.SorobanRpc.Api.GetTransactionStatus.SUCCESS) {
+  if (getResponse.status !== S.rpc.Api.GetTransactionStatus.SUCCESS) {
     throw new Error(`Transacción fallida con estado: ${getResponse.status}`);
   }
 
@@ -184,7 +184,7 @@ async function simulate(
       .build();
 
     const sim = await server.simulateTransaction(tx);
-    if (S.SorobanRpc.Api.isSimulationError(sim) || !sim.result) return null;
+    if (S.rpc.Api.isSimulationError(sim) || !sim.result) return null;
     return sim.result.retval;
   } catch {
     return null;
