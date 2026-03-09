@@ -1,18 +1,7 @@
-import { useState } from "react";
 import DashboardLayout from "@/components/DashboardLayout";
-import TxRow from "@/components/TxRow";
 import { useWallet } from "@/lib/stellar/WalletContext";
 import { useStellarTransactions, type StellarTransaction } from "@/hooks/useStellarTransactions";
 import { truncateAddress } from "@/lib/stellar";
-
-const filters = ["Todos", "Depósitos", "Retiros", "Separaciones", "Bloqueos"];
-const filterMap: Record<string, string | undefined> = {
-  Todos: undefined,
-  Depósitos: "deposit",
-  Retiros: "withdrawal",
-  Separaciones: "split",
-  Bloqueos: "lock",
-};
 
 const StellarTxRow = ({ tx }: { tx: StellarTransaction }) => (
   <div className="flex items-center justify-between py-3 px-4 border-b border-pink-subtle hover:bg-hover-dark transition-colors">
