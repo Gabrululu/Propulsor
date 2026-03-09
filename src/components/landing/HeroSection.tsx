@@ -24,8 +24,26 @@ const HeroSection = () => {
       <div className="absolute inset-0 pointer-events-none opacity-[0.04]">
         <svg width="100%" height="100%">
           <pattern id="diamonds" x="0" y="0" width="80" height="80" patternUnits="userSpaceOnUse">
-            <rect x="35" y="5" width="10" height="10" transform="rotate(45 40 10)" fill="none" stroke="#ffb3c6" strokeWidth="0.5" />
-            <rect x="35" y="45" width="10" height="10" transform="rotate(45 40 50)" fill="none" stroke="#b8f0c8" strokeWidth="0.5" />
+            <rect
+              x="35"
+              y="5"
+              width="10"
+              height="10"
+              transform="rotate(45 40 10)"
+              fill="none"
+              stroke="#ffb3c6"
+              strokeWidth="0.5"
+            />
+            <rect
+              x="35"
+              y="45"
+              width="10"
+              height="10"
+              transform="rotate(45 40 50)"
+              fill="none"
+              stroke="#b8f0c8"
+              strokeWidth="0.5"
+            />
           </pattern>
           <rect width="100%" height="100%" fill="url(#diamonds)" />
         </svg>
@@ -39,7 +57,7 @@ const HeroSection = () => {
           transition={{ duration: 0.6 }}
           className="font-mono text-xs text-body-muted tracking-widest mb-8"
         >
-          Stellar Network · Soroban · Independencia financiera · Perú
+          Independencia financiera · Stellar Network · LATAM
         </motion.p>
 
         {/* Main headline */}
@@ -65,7 +83,8 @@ const HeroSection = () => {
           {/* Description */}
           <div className="md:col-span-3">
             <p className="text-body-muted text-sm leading-relaxed">
-              Separa, protege y ahorra tu dinero automáticamente con bóvedas inteligentes en Stellar. Sin banco. Sin permiso. Solo tú.
+              Separa, protege y ahorra tu dinero automáticamente con bóvedas inteligentes en Stellar. Sin banco. Sin
+              permiso. Solo tú.
             </p>
           </div>
 
