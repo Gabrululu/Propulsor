@@ -1,8 +1,8 @@
 export { getHorizonServer, getSorobanServer, NETWORK_PASSPHRASE, HORIZON_URL, SOROBAN_RPC_URL, STELLAR_EXPLORER_BASE, isSimulationMode, SPLIT_CONTRACT_ID, VAULT_CONTRACT_ID } from "./client";
 export { generateKeypair, fundTestnetAccount, getAccountBalance, encryptSecretKey, decryptSecretKey, truncateAddress } from "./wallet";
 export type { AccountBalances } from "./wallet";
-export { executeSplit, lockVault, getVaultBalances } from "./contracts";
-export type { SplitResult, LockResult, VaultBalances } from "./contracts";
+export { executeSplit, lockVault, getBalances } from "./contracts";
+export type { SplitResult, LockResult, VaultBalance } from "./contracts";
 export { kit, FREIGHTER_ID, XBULL_ID, ALBEDO_ID, LOBSTR_ID, StellarWalletsKit, createDefaultModules, getWalletAddress, signWithWallet } from "./wallets-kit";
 export type { WalletId, WalletModule } from "./wallets-kit";
 export { createCustodialAccount, signCustodial, loadEncryptedSecret, verifyPin } from "./custody";
