@@ -175,6 +175,34 @@ const Bovedas = () => {
     }
   };
 
+  // ── Add to lock ──────────────────────────────────────────
+  const handleAddToLock = async () => {
+    if (!addModal) return;
+    const usdc = parseFloat(addAmount);
+    if (!usdc || usdc <= 0) { setAddError("Ingresa un monto válido."); return; }
+    if (isCustodial && addPin.length < 4) return;
+    setAdding(true);
+    setAddError("");
+    try {
+      const txHash = await contracts.addToLock(
+        addModal.vaultId,
+        usdcToStroops(usdc),
+        isCustodial ? addPin : undefined
+      );
+      const shortHash = `${txHash.slice(0, 8)}...${txHash.slice(-4)}`;
+      toast({ title: `✓ $${usdc.toFixed(2)} agregados`, description: `Tx: ${shortHash}` });
+      setAddModal(null);
+      setAddAmount("");
+      setAddPin("");
+      await loadVaults();
+    } catch (err: unknown) {
+      setAddError("Error al conectar con la red. Intenta de nuevo.");
+      console.error(err);
+    } finally {
+      setAdding(false);
+    }
+  };
+
   return (
     <DashboardLayout>
       <div className="p-6 md:p-10 max-w-5xl pb-24 md:pb-10">
