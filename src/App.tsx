@@ -10,6 +10,7 @@ import Simulate from "./pages/Simulate";
 import Dashboard from "./pages/Dashboard";
 import Bovedas from "./pages/Bovedas";
 import Transacciones from "./pages/Transacciones";
+import Configuracion from "./pages/Configuracion";
 import Onboarding from "./pages/Onboarding";
 import Auth from "./pages/Auth";
 import AuthCallback from "./pages/AuthCallback";
@@ -41,6 +42,7 @@ const App = () => (
               <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
               <Route path="/dashboard/bovedas" element={<ProtectedRoute><Bovedas /></ProtectedRoute>} />
               <Route path="/dashboard/transacciones" element={<ProtectedRoute><Transacciones /></ProtectedRoute>} />
+              <Route path="/dashboard/configuracion" element={<ProtectedRoute><Configuracion /></ProtectedRoute>} />
               <Route path="*" element={<NotFound />} />
             </Routes>
           </BrowserRouter>
