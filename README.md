@@ -1,40 +1,40 @@
 # Propulsor 💜
 
-> **Tu primera herramienta de independencia financiera.**  
-> El dinero que recibes, separado y protegido automáticamente — sin banco, sin comisión, sin que nadie lo toque.
+> **Your first tool for financial independence.**  
+> The money you receive — automatically split and protected. No bank, no fees, no one else can touch it.
 
 ---
 
-## ¿Qué es Propulsor?
+## What is Propulsor?
 
-Propulsor es una plataforma de gestión financiera programable para mujeres en economía informal en Latinoamérica. Usando Smart Contracts en la red **Stellar (Soroban)**, cada ingreso se divide automáticamente en tres bóvedas protegidas según reglas definidas por la usuaria — sin cuenta bancaria, sin comisiones abusivas, con protección real contra presiones externas.
+Propulsor is a programmable financial management platform for women in the informal economy across Latin America. Using Smart Contracts on the **Stellar (Soroban)** network, every income is automatically split into three protected vaults based on user-defined rules — no bank account required, no abusive fees, with real protection against external pressures.
 
-**El problema:** El 70% de las mujeres en economía informal en América Latina no tiene acceso a productos financieros formales (BID, 2024). Perú recibe $800M+ en remesas anuales — la mayoría llega a manos de mujeres jefas de hogar y desaparece en días. No por irresponsabilidad: por falta de herramientas.
+**The problem:** 70% of women in the informal economy in Latin America lack access to formal financial products (IDB, 2024). Peru receives $800M+ in annual remittances — most reaches women heads of household and disappears within days. Not due to irresponsibility: due to lack of tools.
 
-**La solución:** Un contrato inteligente que separa el dinero antes de que llegue la presión.
+**The solution:** A smart contract that separates money before pressure arrives.
 
 ---
 
-## Stack Tecnológico
+## Tech Stack
 
-| Capa | Tecnología |
+| Layer | Technology |
 |---|---|
 | Frontend | React + TypeScript + Vite |
 | Styling | Tailwind CSS |
 | Backend / Auth / DB | Supabase (PostgreSQL + Auth + Edge Functions) |
 | Blockchain | Stellar Network (Testnet / Mainnet) |
-| Smart Contracts | Soroban (Rust) — deploy local |
+| Smart Contracts | Soroban (Rust) |
 | Stellar SDK | `@stellar/stellar-sdk` |
-| Voice / Accesibilidad | ElevenLabs API (`eleven_multilingual_v2`) |
+| Voice / Accessibility | ElevenLabs API (`eleven_multilingual_v2`) |
 | UI Platform | Lovable |
 | Fonts | Space Grotesk + Space Mono (Google Fonts) |
 
 ---
 
-## Arquitectura
+## Architecture
 
 ```
-Usuario
+User
   │
   ▼
 React Frontend (Lovable)
@@ -51,7 +51,7 @@ Supabase Edge Functions
 Stellar Horizon API             ← Balance, tx history, fee stats
 Stellar Soroban RPC             ← Contract execution
   ▼
-Soroban Smart Contracts (Rust)  ← Deploy local con stellar-cli
+Soroban Smart Contracts (Rust)  ← Deployed via stellar-cli
   │  SplitProtocol::execute_split()
   │  VaultManager::lock_vault()
   │  TimeVault::release_on_condition()
@@ -61,9 +61,9 @@ Stellar Testnet → Mainnet
 
 ---
 
-## Variables de Entorno
+## Environment Variables
 
-Crear `.env` en la raíz del proyecto:
+Create `.env` in the project root:
 
 ```env
 # Supabase
@@ -85,24 +85,24 @@ ELEVENLABS_VOICE_ID=your_voice_id
 ```
 ---
 
-## Rutas de la Aplicación
+## Application Routes
 
-| Ruta | Descripción | Auth |
+| Route | Description | Auth |
 |---|---|---|
-| `/` | Landing page | Pública |
-| `/simular` | Simulador interactivo de split | Pública |
-| `/onboarding` | Wizard de 3 pasos + creación de cuenta Stellar | Post-registro |
-| `/dashboard` | Overview de bóvedas y balance | Protegida |
-| `/dashboard/bovadas` | Gestión de bóvedas | Protegida |
-| `/dashboard/transacciones` | Historial de transacciones (local + Stellar) | Protegida |
-| `/dashboard/configuracion` | Perfil, PIN, preferencias de voz | Protegida |
+| `/` | Landing page | Public |
+| `/simular` | Interactive split simulator | Public |
+| `/onboarding` | 3-step wizard + Stellar account creation | Post-signup |
+| `/dashboard` | Vaults & balance overview | Protected |
+| `/dashboard/bovadas` | Vault management | Protected |
+| `/dashboard/transacciones` | Transaction history (local + Stellar) | Protected |
+| `/dashboard/configuracion` | Profile, PIN, voice preferences | Protected |
 
 ---
 
-## Esquema de Base de Datos (Supabase)
+## Database Schema (Supabase)
 
 ```sql
--- Perfil de usuario
+-- User profile
 users_profile (
   id              uuid PRIMARY KEY REFERENCES auth.users,
   name            text,
@@ -115,7 +115,7 @@ users_profile (
   created_at      timestamptz DEFAULT now()
 )
 
--- Bóvedas
+-- Vaults
 vaults (
   id              uuid PRIMARY KEY,
   user_id         uuid REFERENCES users_profile,
@@ -131,7 +131,7 @@ vaults (
   created_at      timestamptz DEFAULT now()
 )
 
--- Transacciones
+-- Transactions
 transactions (
   id              uuid PRIMARY KEY,
   user_id         uuid REFERENCES users_profile,
@@ -145,7 +145,7 @@ transactions (
   created_at      timestamptz DEFAULT now()
 )
 
--- Reglas de split
+-- Split rules
 split_rules (
   id              uuid PRIMARY KEY,
   user_id         uuid REFERENCES users_profile,
@@ -157,17 +157,17 @@ split_rules (
 
 ---
 
-## Módulos del Frontend
+## Frontend Modules
 
 ### `/lib/stellar/`
 
 ```
-client.ts       — SorobanRpc.Server + Horizon.Server configurados
+client.ts       — SorobanRpc.Server + Horizon.Server configuration
 wallet.ts       — generateKeypair, fundTestnetAccount, getAccountBalance,
                   saveEncryptedKeypair, loadDecryptedKeypair
 contracts.ts    — executeSplit, lockVault, getVaultBalances
-                  (simulación automática si CONTRACT_ID está vacío)
-streaming.ts    — Horizon payment streaming para detección en tiempo real
+                  (auto-simulation when CONTRACT_ID is empty)
+streaming.ts    — Horizon payment streaming for real-time detection
 fees.ts         — fetchCurrentFee, fetchXLMPrice (CoinGecko free API)
 ```
 
@@ -175,28 +175,28 @@ fees.ts         — fetchCurrentFee, fetchXLMPrice (CoinGecko free API)
 
 ```
 useVoice.ts     — Hook: { speak, stop, isSpeaking }
-                  Llama a Supabase Edge Function /functions/tts
-                  Cache en memoria para textos repetidos
-                  Falla silenciosamente si la API no responde
+                  Calls Supabase Edge Function /functions/tts
+                  In-memory cache for repeated texts
+                  Fails silently if the API is unresponsive
 messages.ts     — buildSplitConfirmation(vaults, total)
                   buildSimulatorSummary(pen, usdc, splits)
-                  Textos hardcoded del onboarding
+                  Hardcoded onboarding texts
 ```
 
 ### `/components/stellar/`
 
 ```
-NetworkStatus.tsx    — Pill: STELLAR TESTNET · verde/amarillo/rojo
-AccountCreation.tsx  — Terminal animada del onboarding (Friendbot flow)
-TxHash.tsx           — Hash truncado + botón copiar + link Explorer
-BalanceDisplay.tsx   — Balance USDC con polling cada 30s
+NetworkStatus.tsx    — Pill: STELLAR TESTNET · green/yellow/red
+AccountCreation.tsx  — Animated terminal for onboarding (Friendbot flow)
+TxHash.tsx           — Truncated hash + copy button + Explorer link
+BalanceDisplay.tsx   — USDC balance with 30s polling
 ```
 
 ### `/components/voice/`
 
 ```
-SpeakerButton.tsx    — Icono 🔊 con pulse animation (pink)
-SoundWaveBars.tsx    — 3 barras animadas mientras habla
+SpeakerButton.tsx    — 🔊 icon with pulse animation (pink)
+SoundWaveBars.tsx    — 3 animated bars while speaking
 VoiceConfirmation.tsx — Post-split audio feedback
 ```
 
@@ -204,122 +204,122 @@ VoiceConfirmation.tsx — Post-split audio feedback
 
 ## Smart Contracts 
 
-> Los contratos se compilan y deployan usando Stellar
+> Contracts are compiled and deployed using Stellar CLI
 
 ```bash
-# Requisitos
+# Requirements
 rustup target add wasm32-unknown-unknown
 cargo install stellar-cli --features opt
 
-# Compilar
+# Build
 cd contracts/split-protocol
 cargo build --target wasm32-unknown-unknown --release
 
-# Deploy en Testnet
+# Deploy to Testnet
 stellar contract deploy \
   --wasm target/wasm32-unknown-unknown/release/split_protocol.wasm \
   --source account \
   --network testnet
 
-# Copiar el Contract ID resultante → VITE_SPLIT_CONTRACT_ID en .env
+# Copy the resulting Contract ID → VITE_SPLIT_CONTRACT_ID in .env
 ```
 
-### Lógica de los contratos
+### Contract Logic
 
-**SplitProtocol** — Distribuye ingresos en porcentajes:
+**SplitProtocol** — Distributes income by percentages:
 
 $$\text{vault}_i = \text{income} \times \frac{p_i}{100}, \quad \sum_{i=1}^{n} p_i = 100$$
 
-**TimeVault** — Condición de liberación dual:
+**TimeVault** — Dual release condition:
 
-$$\text{release} = \begin{cases} \text{true} & \text{si } t \geq t_{\text{unlock}} \\ \text{true} & \text{si } \text{balance} \geq \text{goal} \\ \text{false} & \text{en otro caso} \end{cases}$$
+$$\text{release} = \begin{cases} \text{true} & \text{if } t \geq t_{\text{unlock}} \\ \text{true} & \text{if } \text{balance} \geq \text{goal} \\ \text{false} & \text{otherwise} \end{cases}$$
 
 ---
 
-## Integración ElevenLabs
+## ElevenLabs Integration
 
-La voz se usa en 3 puntos específicos para accesibilidad de usuarias con baja alfabetización digital:
+Voice is used at 3 specific points for accessibility for users with low digital literacy:
 
-| Punto | Trigger | Mensaje |
+| Point | Trigger | Message |
 |---|---|---|
-| Onboarding Step 1 | Auto-play al montar (+600ms delay) | Bienvenida personalizada por perfil |
-| Post-split confirm | Auto-play al completar el contrato | Narración del desglose real de bóvedas |
-| Simulador | Click en "Escuchar resumen" | Resumen dinámico según sliders actuales |
+| Onboarding Step 1 | Auto-play on mount (+600ms delay) | Personalized welcome by profile |
+| Post-split confirm | Auto-play on contract completion | Narration of actual vault breakdown |
+| Simulator | Click "Listen to summary" | Dynamic summary based on current sliders |
 
-**La API key nunca llega al cliente.** Todo pasa por la Edge Function `/functions/tts`.
+**The API key never reaches the client.** Everything goes through the Edge Function `/functions/tts`.
 
 ---
 
-## Diseño del Sistema
+## Design System
 
 ```
-Colores
-  --bg:        #1e1a1b   Fondo principal (siempre oscuro)
-  --bg-deep:   #181416   Secciones profundas
+Colors
+  --bg:        #1e1a1b   Main background (always dark)
+  --bg-deep:   #181416   Deep sections
   --bg-card:   #252023   Cards
-  --pink:      #ffb3c6   Acento rosa bebé — CTAs, emocional, empowerment
-  --mint:      #b8f0c8   Acento verde menta — técnico, Stellar, confirmaciones
-  --white:     #fdf4f6   Texto principal
-  --sub:       #9a8890   Texto secundario
-  --dim:       #5a4850   Texto dimmed / labels
+  --pink:      #ffb3c6   Baby pink accent — CTAs, emotional, empowerment
+  --mint:      #b8f0c8   Mint green accent — technical, Stellar, confirmations
+  --white:     #fdf4f6   Primary text
+  --sub:       #9a8890   Secondary text
+  --dim:       #5a4850   Dimmed text / labels
 
-Tipografía
-  Space Grotesk 700  — Títulos, uppercase, tracking −0.03em
-  Space Mono         — Labels, código, monospace UI
+Typography
+  Space Grotesk 700  — Headings, uppercase, tracking −0.03em
+  Space Mono         — Labels, code, monospace UI
   Space Grotesk 400  — Body text
 
-Reglas
-  · Rosa (#ffb3c6) para elementos emocionales y CTAs
-  · Menta (#b8f0c8) para elementos técnicos y estados de éxito
-  · Sin gradientes en fondos — solo colores sólidos oscuros
-  · Acentos solo en texto, bordes (baja opacidad) y micro-glows (≤8% opacidad)
+Rules
+  · Pink (#ffb3c6) for emotional elements and CTAs
+  · Mint (#b8f0c8) for technical elements and success states
+  · No gradients on backgrounds — solid dark colors only
+  · Accents only on text, borders (low opacity) and micro-glows (≤8% opacity)
 ```
 
 ---
 
-## Estado del Proyecto
+## Project Status
 
-| Módulo | Estado |
+| Module | Status |
 |---|---|
-| Landing page | ✅ Completo |
-| Auth (Supabase) | ✅ Completo |
-| Onboarding wizard | ✅ Completo |
-| Dashboard overview | ✅ Completo |
-| Gestión de bóvedas | ✅ Completo |
-| Historial de transacciones | ✅ Completo |
-| Simulador interactivo | ✅ Completo |
-| Stellar SDK layer | ✅ Completo |
-| ElevenLabs voice | ✅ Completo |
-| Contratos Soroban (Rust) | ✅ Deployed Testnet |
-| SEP-24 Anchor real | 🔜 Post-hackathon |
+| Landing page | ✅ Complete |
+| Auth (Supabase) | ✅ Complete |
+| Onboarding wizard | ✅ Complete |
+| Dashboard overview | ✅ Complete |
+| Vault management | ✅ Complete |
+| Transaction history | ✅ Complete |
+| Interactive simulator | ✅ Complete |
+| Stellar SDK layer | ✅ Complete |
+| ElevenLabs voice | ✅ Complete |
+| Soroban contracts (Rust) | ✅ Deployed Testnet |
+| SEP-24 Real Anchor | 🔜 Post-hackathon |
 | Stellar Mainnet | 🔜 Post-hackathon |
 
 ---
 
-## Contratos Desplegados (Stellar Testnet)
+## Deployed Contracts (Stellar Testnet)
 
 ### SplitProtocol
 
-| Campo | Valor |
+| Field | Value |
 |---|---|
 | **Contract ID** | `CCRH4EPUVIPESWYWOWPQ2QK3XN6KBR3RY6UFK36A4MXKKXIFH6ONRTVY` |
 | **Wasm Hash** | `ea57fb45e7dd0e5865d9512b50683d22b7076f1eba36c24dffc7b09077533c1e` |
 | **Deploy Tx** | [`d11b2ad6…0834ddc7`](https://stellar.expert/explorer/testnet/tx/d11b2ad60355df81a03a2a0d16c626fe016f0e1265f31d280292549b0834ddc7) |
-| **Lab** | [Ver en Stellar Lab](https://lab.stellar.org/r/testnet/contract/CCRH4EPUVIPESWYWOWPQ2QK3XN6KBR3RY6UFK36A4MXKKXIFH6ONRTVY) |
+| **Lab** | [View on Stellar Lab](https://lab.stellar.org/r/testnet/contract/CCRH4EPUVIPESWYWOWPQ2QK3XN6KBR3RY6UFK36A4MXKKXIFH6ONRTVY) |
 
 ### TimeVault
 
-| Campo | Valor |
+| Field | Value |
 |---|---|
 | **Contract ID** | `CC73UGT72A2MOZOSK6WFWMMIL32OJPJSPKEBFNBLK2GZJYNORERTSSWX` |
 | **Wasm Hash** | `cf3edcf33cdbbfbe762d39de437b03d711e7d320510c7029cf593f5ae50bc72d` |
 | **Deploy Tx** | [`011aaf17…3651d6ed`](https://stellar.expert/explorer/testnet/tx/011aaf17f4993bb9242a84c4d983e975d260313ebd9434a354f2b8cd3651d6ed) |
-| **Lab** | [Ver en Stellar Lab](https://lab.stellar.org/r/testnet/contract/CC73UGT72A2MOZOSK6WFWMMIL32OJPJSPKEBFNBLK2GZJYNORERTSSWX) |
+| **Lab** | [View on Stellar Lab](https://lab.stellar.org/r/testnet/contract/CC73UGT72A2MOZOSK6WFWMMIL32OJPJSPKEBFNBLK2GZJYNORERTSSWX) |
 
-### Verificación en Testnet
+### Testnet Verification
 
 ```bash
-# set_rules — configurar 60/30/10
+# set_rules — configure 60/30/10
 stellar contract invoke \
   --source-account deployer \
   --id CCRH4EPUVIPESWYWOWPQ2QK3XN6KBR3RY6UFK36A4MXKKXIFH6ONRTVY \
@@ -327,9 +327,9 @@ stellar contract invoke \
   -- set_rules \
   --user $(stellar keys public-key deployer) \
   --rules '[{"vault_id":0,"percentage":60},{"vault_id":1,"percentage":30},{"vault_id":2,"percentage":10}]'
-# ✅ Event: rules_set — 3 reglas
+# ✅ Event: rules_set — 3 rules
 
-# execute_split — dividir 1,000,000,000 stroops
+# execute_split — split 1,000,000,000 stroops
 stellar contract invoke \
   --source-account deployer \
   --id CCRH4EPUVIPESWYWOWPQ2QK3XN6KBR3RY6UFK36A4MXKKXIFH6ONRTVY \
@@ -338,20 +338,20 @@ stellar contract invoke \
   --user $(stellar keys public-key deployer) \
   --income 1000000000
 # ✅ Event: split_done
-# Resultado: [vault_0: 600M, vault_1: 300M, vault_2: 100M]
+# Result: [vault_0: 600M, vault_1: 300M, vault_2: 100M]
 ```
 
 ---
 
-## Contexto: She Ships Hackathon
+## Context: She Ships Hackathon
 
-**She Ships** es un hackathon global de 48 horas celebrando el Día Internacional de la Mujer (6–8 Marzo 2026).
+**She Ships** is a 48-hour global hackathon celebrating International Women's Day (March 6–8, 2026).
 
 ---
 
-## Equipo
+## Team
 
-Construido con 💜 en Lima, Perú — She Ships 2026.
+Built with 💜 in Lima, Peru — She Ships 2026.
 
 ---
 
