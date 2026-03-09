@@ -1,19 +1,9 @@
 import { useState } from "react";
 import DashboardLayout from "@/components/DashboardLayout";
 import TxRow from "@/components/TxRow";
+import { useWallet } from "@/lib/stellar/WalletContext";
 import { useStellarTransactions, type StellarTransaction } from "@/hooks/useStellarTransactions";
-import { truncateAddress, STELLAR_EXPLORER_BASE } from "@/lib/stellar";
-
-const DEMO_PUBLIC_KEY = null; // Set to real key after onboarding
-
-const allTxs = [
-  { type: "split" as const, description: "Separación automática", amount: 270.59, vault: "Todas", txHash: "GBPROPULSOR1234ABCDXF9A", timestamp: "8 Mar 2026, 14:30", status: "confirmed" as const },
-  { type: "deposit" as const, description: "Depósito desde anchor SEP-24", amount: 270.59, vault: "—", txHash: "GBPROPULSOR5678EFGHXF9A", timestamp: "8 Mar 2026, 14:30", status: "confirmed" as const },
-  { type: "lock" as const, description: "Bloqueo time-lock activado", amount: 27.06, vault: "Meta grande", txHash: "GBPROPULSOR9012IJKLXF9A", timestamp: "8 Mar 2026, 14:28", status: "confirmed" as const },
-  { type: "deposit" as const, description: "Depósito inicial", amount: 135.30, vault: "—", txHash: "GBPROPULSORMNOPQRSTXF9A", timestamp: "5 Mar 2026, 10:00", status: "confirmed" as const },
-  { type: "split" as const, description: "Separación automática", amount: 135.30, vault: "Todas", txHash: "GBPROPULSORUVWXYZ01XF9A", timestamp: "5 Mar 2026, 10:00", status: "confirmed" as const },
-  { type: "withdrawal" as const, description: "Retiro a cuenta bancaria", amount: 50.00, vault: "Hogar", txHash: "GBPROPULSOR2345BCDFXF9A", timestamp: "3 Mar 2026, 16:45", status: "confirmed" as const },
-];
+import { truncateAddress } from "@/lib/stellar";
 
 const filters = ["Todos", "Depósitos", "Retiros", "Separaciones", "Bloqueos"];
 const filterMap: Record<string, string | undefined> = {
@@ -63,9 +53,10 @@ const StellarTxRow = ({ tx }: { tx: StellarTransaction }) => (
 );
 
 const Transacciones = () => {
+  const { publicKey } = useWallet();
   const [filter, setFilter] = useState("Todos");
-  const [tab, setTab] = useState<"local" | "stellar">("local");
-  const { transactions: stellarTxs, loading: stellarLoading } = useStellarTransactions(DEMO_PUBLIC_KEY);
+  const [tab, setTab] = useState<"stellar">("stellar");
+  const { transactions: stellarTxs, loading: stellarLoading } = useStellarTransactions(publicKey);
 
   const filtered = filterMap[filter]
     ? allTxs.filter((tx) => tx.type === filterMap[filter])
