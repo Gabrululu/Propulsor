@@ -7,12 +7,12 @@ import {
   ReactNode,
 } from "react";
 import { kit, FREIGHTER_ID, type WalletId } from "./wallets-kit";
-import { createCustodialAccount, signCustodial, loadEncryptedSecret } from "./custody";
+import { createCustodialAccount, createCustodialAccountNoPin, signCustodial, loadEncryptedSecret } from "./custody";
 import { NETWORK_PASSPHRASE } from "./client";
 
 // ── Types ───────────────────────────────────────────────────
 
-export type WalletMode = "custodial" | "external" | null;
+export type WalletMode = "custodial" | "custodial_social" | "external" | null;
 
 interface WalletState {
   mode: WalletMode;
@@ -22,6 +22,7 @@ interface WalletState {
   walletId: WalletId | null;
 
   connectCustodial: (userId: string, pin: string) => Promise<string>;
+  connectSocial: (userId: string) => Promise<string>;
   connectExternal: (walletId: WalletId) => Promise<void>;
   disconnect: () => void;
   signTransaction: (txXdr: string, pin?: string) => Promise<string>;
@@ -94,6 +95,24 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     [persist]
   );
 
+  // ── Social custodial connect (no PIN) ───────────────────
+  const connectSocial = useCallback(
+    async (userId: string): Promise<string> => {
+      setIsConnecting(true);
+      try {
+        const { publicKey: pk } = await createCustodialAccountNoPin(userId);
+        setMode("custodial_social");
+        setPublicKey(pk);
+        setWalletId(null);
+        persist("custodial_social", pk, null);
+        return pk;
+      } finally {
+        setIsConnecting(false);
+      }
+    },
+    [persist]
+  );
+
   // ── External wallet connect ─────────────────────────────
   const connectExternal = useCallback(
     async (wId: WalletId) => {
@@ -156,6 +175,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         isConnecting,
         walletId,
         connectCustodial,
+        connectSocial,
         connectExternal,
         disconnect,
         signTransaction,

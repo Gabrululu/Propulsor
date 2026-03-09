@@ -26,6 +26,7 @@ const Auth = () => {
   const [verificationSent, setVerificationSent] = useState(false);
   const [walletLoading, setWalletLoading] = useState<string | null>(null);
   const [walletError, setWalletError] = useState("");
+  const [socialLoading, setSocialLoading] = useState<string | null>(null);
   const navigate = useNavigate();
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -53,6 +54,19 @@ const Auth = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleSocialLogin = async (provider: "google" | "github") => {
+    setSocialLoading(provider);
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider,
+      options: { redirectTo: `${window.location.origin}/auth/callback` },
+    });
+    if (error) {
+      toast.error(error.message || "Error con login social");
+      setSocialLoading(null);
+    }
+    // On success Supabase redirects the browser — no further action needed
   };
 
   const handleWalletLogin = async (walletId: WalletId) => {
@@ -193,7 +207,44 @@ const Auth = () => {
           </button>
         </form>
 
-        {/* Divider */}
+        {/* Social login divider */}
+        <div className="flex items-center gap-3 my-6">
+          <div className="flex-1 h-px bg-border" />
+          <span className="font-mono text-[0.6rem] text-muted-foreground uppercase tracking-wider">
+            O continúa con
+          </span>
+          <div className="flex-1 h-px bg-border" />
+        </div>
+
+        {/* Social buttons */}
+        <div className="grid grid-cols-2 gap-3">
+          <button
+            onClick={() => handleSocialLogin("google")}
+            disabled={!!socialLoading}
+            className="flex items-center justify-center gap-2 p-3 rounded-sm border border-border bg-muted hover:bg-card hover:border-primary transition-all text-sm text-foreground disabled:opacity-50"
+          >
+            {socialLoading === "google" ? (
+              <span className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+            ) : (
+              <span className="text-lg">G</span>
+            )}
+            <span className="font-mono text-xs">Google</span>
+          </button>
+          <button
+            onClick={() => handleSocialLogin("github")}
+            disabled={!!socialLoading}
+            className="flex items-center justify-center gap-2 p-3 rounded-sm border border-border bg-muted hover:bg-card hover:border-primary transition-all text-sm text-foreground disabled:opacity-50"
+          >
+            {socialLoading === "github" ? (
+              <span className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+            ) : (
+              <span className="text-lg">⌥</span>
+            )}
+            <span className="font-mono text-xs">GitHub</span>
+          </button>
+        </div>
+
+        {/* Stellar wallet divider */}
         <div className="flex items-center gap-3 my-6">
           <div className="flex-1 h-px bg-border" />
           <span className="font-mono text-[0.6rem] text-muted-foreground uppercase tracking-wider">

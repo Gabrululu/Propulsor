@@ -1,4 +1,5 @@
 import SplitBar from "./SplitBar";
+import { formatTimeRemaining } from "@/lib/stellar/contracts";
 
 interface VaultCardProps {
   name: string;
@@ -8,7 +9,11 @@ interface VaultCardProps {
   goalAmount?: number;
   unlockDate?: string;
   isLocked?: boolean;
+  canRelease?: boolean;   // lock conditions are met → allow withdraw
+  timeRemaining?: number; // seconds; 0 = no time condition
   colorVariant: "pink" | "mint" | "pink-soft";
+  onLock?: () => void;
+  onRelease?: () => void;
 }
 
 const colorTextMap = {
@@ -25,12 +30,18 @@ const VaultCard = ({
   goalAmount,
   unlockDate,
   isLocked,
+  canRelease,
+  timeRemaining = 0,
   colorVariant,
+  onLock,
+  onRelease,
 }: VaultCardProps) => {
   const progress = goalAmount ? (balance / goalAmount) * 100 : percentage;
+  const locked = isLocked && !canRelease;
 
   return (
     <div className="bg-card-dark border border-pink-subtle rounded-sm p-5 hover:bg-hover-dark transition-colors">
+      {/* Header */}
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-3">
           <span className="text-2xl">{icon}</span>
@@ -41,18 +52,26 @@ const VaultCard = ({
             <span className="text-body-muted text-xs font-mono">{percentage}%</span>
           </div>
         </div>
-        {isLocked && (
-          <span className="text-xs font-mono text-body-muted bg-deep px-2 py-1 rounded-sm">
-            🔒 {unlockDate ? `Hasta ${unlockDate}` : "Bloqueado"}
+
+        {/* Status badge */}
+        {canRelease && (
+          <span className="text-xs font-mono text-mint bg-deep px-2 py-1 rounded-sm animate-pulse">
+            🔓 Lista
           </span>
         )}
-        {!isLocked && balance > 0 && (
+        {locked && (
+          <span className="text-xs font-mono text-body-muted bg-deep px-2 py-1 rounded-sm">
+            🔒 {unlockDate ? `Hasta ${unlockDate}` : "Bloqueada"}
+          </span>
+        )}
+        {!locked && !canRelease && balance > 0 && (
           <span className="text-xs font-mono text-mint bg-deep px-2 py-1 rounded-sm">
             ✓ Disponible
           </span>
         )}
       </div>
 
+      {/* Balance */}
       <div className="mb-3">
         <span className={`font-mono text-2xl font-bold ${colorTextMap[colorVariant]}`}>
           ${balance.toFixed(2)}
@@ -60,11 +79,13 @@ const VaultCard = ({
         <span className="text-body-muted text-sm ml-2">USDC</span>
       </div>
 
+      {/* Progress bar */}
       <SplitBar
         segments={[{ percentage: Math.min(progress, 100), color: colorVariant }]}
         height={4}
       />
 
+      {/* Goal info */}
       {goalAmount && (
         <div className="flex justify-between mt-2">
           <span className="text-xs text-dimmed font-mono">
@@ -76,17 +97,46 @@ const VaultCard = ({
         </div>
       )}
 
+      {/* Time remaining */}
+      {timeRemaining > 0 && locked && (
+        <p className="text-xs font-mono text-dimmed mt-2">
+          ⏱ {formatTimeRemaining(timeRemaining)}
+        </p>
+      )}
+
+      {/* Action buttons */}
       <div className="flex gap-2 mt-4">
-        <button className="btn-pink text-xs py-2 px-4 rounded-sm flex-1" disabled={isLocked}>
-          Depositar
-        </button>
-        <button
-          className="btn-outline-pink text-xs py-2 px-4 rounded-sm flex-1"
-          disabled={isLocked}
-          style={{ opacity: isLocked ? 0.4 : 1 }}
-        >
-          Retirar
-        </button>
+        {/* Depositar / Bloquear */}
+        {!locked && !canRelease ? (
+          <button
+            onClick={onLock}
+            className="btn-pink text-xs py-2 px-4 rounded-sm flex-1"
+          >
+            Bloquear
+          </button>
+        ) : (
+          <button className="btn-pink text-xs py-2 px-4 rounded-sm flex-1 opacity-40" disabled>
+            Bloqueada
+          </button>
+        )}
+
+        {/* Retirar / Liberar */}
+        {canRelease ? (
+          <button
+            onClick={onRelease}
+            className="btn-outline-pink text-xs py-2 px-4 rounded-sm flex-1"
+          >
+            Retirar →
+          </button>
+        ) : (
+          <button
+            className="btn-outline-pink text-xs py-2 px-4 rounded-sm flex-1"
+            disabled={locked}
+            style={{ opacity: locked ? 0.4 : 1 }}
+          >
+            Retirar
+          </button>
+        )}
       </div>
     </div>
   );

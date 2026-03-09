@@ -3,10 +3,6 @@
 > **Tu primera herramienta de independencia financiera.**  
 > El dinero que recibes, separado y protegido automáticamente — sin banco, sin comisión, sin que nadie lo toque.
 
-**She Ships Hackathon · 6–8 Marzo 2026 · Lima, Perú 🇵🇪**  
-Categorías Sezzle: *Best Fintech Solution for Women's Economic Empowerment* · *Best Financial Inclusion Solution for Women*  
-Special Award target: *Best Project Built with ElevenLabs*
-
 ---
 
 ## ¿Qué es Propulsor?
@@ -79,17 +75,14 @@ VITE_STELLAR_NETWORK=TESTNET
 VITE_HORIZON_URL=https://horizon-testnet.stellar.org
 VITE_SOROBAN_RPC_URL=https://soroban-testnet.stellar.org
 
-# Soroban Contract IDs (dejar vacío para modo simulación)
+# Soroban Contract IDs 
 VITE_SPLIT_CONTRACT_ID=
 VITE_VAULT_CONTRACT_ID=
 
-# ElevenLabs (solo en Supabase Edge Functions — nunca en cliente)
+# ElevenLabs 
 ELEVENLABS_API_KEY=your_elevenlabs_api_key
 ELEVENLABS_VOICE_ID=your_voice_id
 ```
-
-> **Nota:** `VITE_SPLIT_CONTRACT_ID` y `VITE_VAULT_CONTRACT_ID` se completan después de deployar los contratos Soroban localmente. Mientras estén vacíos, la app corre en **modo simulación** con delays y tx hashes mock realistas.
-
 ---
 
 ## Rutas de la Aplicación
@@ -115,7 +108,7 @@ users_profile (
   name            text,
   profile_type    enum('jefa_hogar','emprendedora','trabajadora','freelancer'),
   stellar_public_key    text,
-  stellar_secret_encrypted text,  -- AES-GCM encrypted, NUNCA plaintext
+  stellar_secret_encrypted text,  
   stellar_funded  boolean DEFAULT false,
   onboarding_complete boolean DEFAULT false,
   voice_enabled   boolean DEFAULT true,
@@ -129,12 +122,12 @@ vaults (
   name            text,
   icon            text,
   vault_type      enum('disponible','time_lock','meta'),
-  percentage      integer,          -- 0-100, suma total = 100
+  percentage      integer,          
   balance_usdc    numeric DEFAULT 0,
-  unlock_date     timestamptz,      -- solo si vault_type = time_lock
-  goal_amount     numeric,          -- solo si vault_type = meta
+  unlock_date     timestamptz,      
+  goal_amount     numeric,        
   color_variant   enum('pink','mint','soft'),
-  stellar_account_id text,          -- sub-account o memo en Stellar
+  stellar_account_id text,          
   created_at      timestamptz DEFAULT now()
 )
 
@@ -209,9 +202,9 @@ VoiceConfirmation.tsx — Post-split audio feedback
 
 ---
 
-## Smart Contracts (Deploy Local)
+## Smart Contracts 
 
-> Los contratos se compilan y deployan desde el entorno local. Lovable no ejecuta Rust.
+> Los contratos se compilan y deployan usando Stellar
 
 ```bash
 # Requisitos
@@ -295,9 +288,9 @@ Reglas
 | Gestión de bóvedas | ✅ Completo |
 | Historial de transacciones | ✅ Completo |
 | Simulador interactivo | ✅ Completo |
-| Stellar SDK layer | ✅ Completo (modo simulación) |
+| Stellar SDK layer | ✅ Completo |
 | ElevenLabs voice | ✅ Completo |
-| Contratos Soroban (Rust) | 🔧 Deploy local pendiente |
+| Contratos Soroban (Rust) | 🔧 Deploy local |
 | SEP-24 Anchor real | 🔜 Post-hackathon |
 | Stellar Mainnet | 🔜 Post-hackathon |
 
@@ -305,7 +298,7 @@ Reglas
 
 ## Contexto: She Ships Hackathon
 
-**She Ships** es un hackathon global de 48 horas celebrando el Día Internacional de la Mujer (6–8 Marzo 2026). Propulsor compite en las categorías de Sezzle enfocadas en inclusión financiera femenina, y aplica al Special Award de ElevenLabs por integración de voz con propósito real de accesibilidad.
+**She Ships** es un hackathon global de 48 horas celebrando el Día Internacional de la Mujer (6–8 Marzo 2026).
 
 ---
 
@@ -315,4 +308,4 @@ Construido con 💜 en Lima, Perú — She Ships 2026.
 
 ---
 
-*Built on Stellar · Powered by Soroban · Voice by ElevenLabs · She Ships 2026 💜*
+*Built on Stellar · Powered by Soroban · She Ships 2026 💜*

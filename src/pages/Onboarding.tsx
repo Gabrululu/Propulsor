@@ -7,6 +7,8 @@ import SoundWaveBars from "@/components/voice/SoundWaveBars";
 import ConnectModal from "@/components/stellar/ConnectModal";
 import { useVoice } from "@/hooks/useVoice";
 import { useAuth } from "@/hooks/useAuth";
+import { useWallet } from "@/lib/stellar/WalletContext";
+import { useContracts } from "@/hooks/useContracts";
 import { supabase } from "@/integrations/supabase/client";
 import {
   ONBOARDING_WELCOME,
@@ -30,12 +32,22 @@ const Onboarding = () => {
   const [deploying, setDeploying] = useState(false);
   const [deployDone, setDeployDone] = useState(false);
   const [stellarPublicKey, setStellarPublicKey] = useState("");
+  const [pin, setPin] = useState("");
+  const [txHash, setTxHash] = useState("");
+  const [terminalLines, setTerminalLines] = useState<
+    { text: string; color?: "pink" | "mint" | "dimmed" | "default" }[]
+  >([]);
+  const [deployError, setDeployError] = useState("");
+
   const navigate = useNavigate();
   const { speak, stop, isSpeaking } = useVoice();
   const { user } = useAuth();
+  const { mode } = useWallet();
+  const contracts = useContracts();
   const welcomePlayed = useRef(false);
 
   const totalSteps = 4;
+  const isCustodial = mode === "custodial";
 
   useEffect(() => {
     if (step === 0 && !welcomePlayed.current) {
@@ -61,38 +73,72 @@ const Onboarding = () => {
     setTimeout(() => setStep(3), 800);
   };
 
+  const addLine = (text: string, color?: "pink" | "mint" | "dimmed" | "default") => {
+    setTerminalLines((prev) => [...prev, { text, color }]);
+  };
+
   const handleDeploy = async () => {
+    if (isCustodial && !pin) return;
     setDeploying(true);
+    setDeployError("");
+    setTerminalLines([
+      { text: "Ejecutando en Soroban...", color: "pink" },
+      { text: "Creando 3 bóvedas...", color: "default" },
+      { text: `→ ${vaultNames[0]} (${percentages[0]}%)`, color: "pink" },
+      { text: `→ ${vaultNames[1]} (${percentages[1]}%)`, color: "mint" },
+      { text: `→ ${vaultNames[2]} (${percentages[2]}%)`, color: "pink" },
+      { text: "", color: "default" },
+    ]);
 
-    // Save profile to Supabase
-    if (user) {
-      const profileData: Record<string, any> = {
-        id: user.id,
-        name: name.trim(),
-        profile_type: profileType as any,
-        onboarding_complete: true,
-      };
+    try {
+      // Save profile to Supabase
+      if (user) {
+        const profileData: Record<string, unknown> = {
+          id: user.id,
+          name: name.trim(),
+          profile_type: profileType as never,
+          onboarding_complete: true,
+        };
+        if (stellarPublicKey) profileData.stellar_public_key = stellarPublicKey;
 
-      // Only set stellar_public_key if we have it (custodial already saved it, but external needs it)
-      if (stellarPublicKey) {
-        profileData.stellar_public_key = stellarPublicKey;
+        const { error } = await supabase
+          .from("users_profile")
+          .upsert(profileData as never, { onConflict: "id" });
+        if (error) console.error("Failed to save profile:", error.message);
       }
 
-      const { error } = await supabase
-        .from("users_profile")
-        .upsert(profileData as any, { onConflict: "id" });
+      // Call set_rules on-chain
+      addLine("Desplegando reglas de split en el contrato...", "default");
 
-      if (error) {
-        console.error("Failed to save profile:", error.message);
+      const rules = percentages.map((pct, i) => ({ vault_id: i, percentage: pct }));
+      const hash = await contracts.setRules(
+        rules,
+        isCustodial ? pin : undefined,
+        (msg) => addLine(msg, "dimmed")
+      );
+
+      setTxHash(hash);
+      const shortHash = `${hash.slice(0, 8)}...${hash.slice(-4)}`;
+      addLine(`→ Tx: ${shortHash} ✓`, "mint");
+
+      // Persist tx hash to Supabase for audit trail
+      if (user) {
+        await supabase
+          .from("users_profile")
+          .update({ split_contract_tx: hash } as never)
+          .eq("id", user.id);
       }
-    }
 
-    setTimeout(() => {
       setDeployDone(true);
       const msg = buildSplitConfirmation(vaultNames, percentages);
       setTimeout(() => speak(msg), 600);
-      setTimeout(() => navigate("/dashboard"), 4000);
-    }, 2500);
+      setTimeout(() => navigate("/dashboard"), 4500);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Error desconocido";
+      setDeployError(message);
+      addLine(`✗ Error: ${message}`, "dimmed");
+      setDeploying(false);
+    }
   };
 
   return (
@@ -228,7 +274,31 @@ const Onboarding = () => {
               colors={["pink", "mint", "pink-soft"]}
               onChange={setPercentages}
             />
-            <button onClick={handleDeploy} className="btn-pink w-full rounded-sm mt-8">
+
+            {/* PIN field for custodial wallets */}
+            {isCustodial && (
+              <div className="mt-6">
+                <label className="block text-xs font-mono text-muted-foreground uppercase tracking-widest mb-2">
+                  Confirma tu PIN para firmar en Stellar
+                </label>
+                <input
+                  type="password"
+                  inputMode="numeric"
+                  maxLength={4}
+                  value={pin}
+                  onChange={(e) => setPin(e.target.value.replace(/\D/g, ""))}
+                  className="w-full bg-card border border-border rounded-sm px-4 py-3 text-foreground text-center text-xl tracking-[1rem] focus:outline-none focus:ring-1 focus:ring-primary"
+                  placeholder="••••"
+                />
+              </div>
+            )}
+
+            <button
+              onClick={handleDeploy}
+              disabled={isCustodial && pin.length < 4}
+              className="btn-pink w-full rounded-sm mt-8"
+              style={{ opacity: isCustodial && pin.length < 4 ? 0.4 : 1 }}
+            >
               Crear mis bóvedas →
             </button>
           </div>
@@ -237,23 +307,36 @@ const Onboarding = () => {
         {/* Deploying / Success */}
         {deploying && (
           <div className="text-center">
-            <TerminalBlock
-              title="soroban :: deploy"
-              lines={[
-                { text: "Ejecutando en Soroban...", color: "pink" },
-                { text: "Creando 3 bóvedas...", color: "default" },
-                { text: `→ ${vaultNames[0]} (${percentages[0]}%)`, color: "pink" },
-                { text: `→ ${vaultNames[1]} (${percentages[1]}%)`, color: "mint" },
-                { text: `→ ${vaultNames[2]} (${percentages[2]}%)`, color: "pink" },
-                { text: "", color: "default" },
-                { text: "Desplegando contrato...", color: "default" },
-                { text: `→ Tx: GBPROPULSOR...XF9A ✓`, color: "mint" },
-              ]}
-            />
+            <TerminalBlock title="soroban :: deploy" lines={terminalLines} />
+
+            {deployError && !deployDone && (
+              <div className="mt-4">
+                <p className="text-xs font-mono text-dimmed mb-2">
+                  Error al conectar con la red. Intenta de nuevo.
+                </p>
+                <button
+                  onClick={() => { setDeploying(false); setTerminalLines([]); }}
+                  className="font-mono text-[0.6rem] uppercase tracking-wider text-primary hover:opacity-80 transition-opacity"
+                >
+                  Reintentar
+                </button>
+              </div>
+            )}
+
             {deployDone && (
               <div className="mt-6 flex flex-col items-center gap-3">
                 <SoundWaveBars isActive={isSpeaking} />
                 <p className="text-muted-foreground text-sm">Tu dinero ya está protegido.</p>
+                {txHash && (
+                  <a
+                    href={`https://stellar.expert/explorer/testnet/tx/${txHash}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="font-mono text-[0.6rem] text-mint hover:opacity-80 transition-opacity"
+                  >
+                    Ver en Stellar Expert →
+                  </a>
+                )}
                 <button
                   onClick={() => {
                     const msg = buildSplitConfirmation(vaultNames, percentages);
@@ -265,7 +348,9 @@ const Onboarding = () => {
                 </button>
               </div>
             )}
-            {!deployDone && <p className="text-muted-foreground text-sm mt-6">Preparando tu espacio...</p>}
+            {!deployDone && !deployError && (
+              <p className="text-muted-foreground text-sm mt-6">Preparando tu espacio...</p>
+            )}
           </div>
         )}
       </div>

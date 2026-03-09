@@ -94,6 +94,46 @@ export async function loadEncryptedSecret(
   return data.stellar_secret_encrypted ?? null;
 }
 
+// ── Create custodial account without PIN (social auth) ──────
+// Uses userId as the encryption seed — no PIN required.
+// Idempotent: returns existing keys if account already exists.
+
+export async function createCustodialAccountNoPin(
+  userId: string
+): Promise<CustodialAccountResult> {
+  // Return existing account if already created
+  const { data: existing } = await supabase
+    .from("users_profile")
+    .select("stellar_public_key, stellar_secret_encrypted")
+    .eq("id", userId)
+    .single();
+
+  if (existing?.stellar_public_key && existing?.stellar_secret_encrypted) {
+    return { publicKey: existing.stellar_public_key, funded: true };
+  }
+
+  // Generate new keypair and encrypt using userId as passphrase
+  const { publicKey, secretKey } = generateKeypair();
+  const funded = await fundTestnetAccount(publicKey);
+  const encrypted = await encryptSecretKey(secretKey, userId);
+
+  const { error } = await supabase.from("users_profile").upsert(
+    {
+      id: userId,
+      stellar_public_key: publicKey,
+      stellar_secret_encrypted: encrypted,
+      stellar_funded: funded,
+    },
+    { onConflict: "id" }
+  );
+
+  if (error) {
+    console.error("Failed to save social custodial account:", error.message);
+  }
+
+  return { publicKey, funded };
+}
+
 // ── Verify PIN is correct (decrypt → check validity) ────────
 
 export async function verifyPin(
