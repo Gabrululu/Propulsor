@@ -377,15 +377,5 @@ const Dashboard = () => {
   );
 };
 
-// Placeholder type kept for TxRow compatibility
-const mockTxs: {
-  type: "split" | "deposit" | "lock" | "withdrawal";
-  description: string;
-  amount: number;
-  vault: string;
-  txHash: string;
-  timestamp: string;
-  status: "confirmed" | "pending";
-}[] = [];
 
 export default Dashboard;
