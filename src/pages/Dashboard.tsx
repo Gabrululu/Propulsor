@@ -39,7 +39,15 @@ const Dashboard = () => {
   // On-chain vault balances (USDC floats for display)
   const [vaultBalances, setVaultBalances] = useState<number[]>([0, 0, 0]);
   const [balancesLoading, setBalancesLoading] = useState(true);
-  const [recentTxs, setRecentTxs] = useState<typeof mockTxs>([]);
+  const [recentTxs, setRecentTxs] = useState<{
+    type: "split" | "deposit" | "lock" | "withdrawal";
+    description: string;
+    amount: number;
+    vault: string;
+    txHash: string;
+    timestamp: string;
+    status: "confirmed" | "pending";
+  }[]>([]);
 
   // On-chain split rules & lock states
   const [rules, setRules] = useState<SplitRule[]>([]);
@@ -191,7 +199,7 @@ const Dashboard = () => {
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8">
           <div>
             <h1 className="text-2xl font-bold text-foreground">Hola, {userName || "amiga"} 👋</h1>
-            <p className="text-body-muted text-xs font-mono mt-1">8 de marzo, 2026</p>
+            <p className="text-body-muted text-xs font-mono mt-1">{new Date().toLocaleDateString("es-PE", { day: "numeric", month: "long", year: "numeric" })}</p>
           </div>
           <div className="flex items-center gap-3">
             {mode && (
@@ -377,15 +385,5 @@ const Dashboard = () => {
   );
 };
 
-// Placeholder type kept for TxRow compatibility
-const mockTxs: {
-  type: "split" | "deposit" | "lock" | "withdrawal";
-  description: string;
-  amount: number;
-  vault: string;
-  txHash: string;
-  timestamp: string;
-  status: "confirmed" | "pending";
-}[] = [];
 
 export default Dashboard;
