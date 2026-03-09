@@ -19,7 +19,8 @@ export interface WalletModule {
   name: string;
   icon: string;
   isAvailable: () => Promise<boolean>;
-  getAddress: () => Promise<string>;
+  requestAccess: () => Promise<string>; // opens popup → returns address
+  getAddress: () => Promise<string>;    // returns address if already granted
   signTransaction: (txXdr: string, opts: { networkPassphrase: string; address: string }) => Promise<string>;
 }
 
@@ -38,10 +39,25 @@ function createFreighterModule(): WalletModule {
         return false;
       }
     },
+    async requestAccess() {
+      const freighter = await import("@stellar/freighter-api");
+      const result = await freighter.requestAccess();
+      if ("error" in result) throw new Error(result.error);
+      // requestAccess can return empty string if user hasn't signed in yet
+      if (!result.address) {
+        // Retry with getAddress after access was granted
+        const addrResult = await freighter.getAddress();
+        if ("error" in addrResult) throw new Error(addrResult.error);
+        if (!addrResult.address) throw new Error("No se obtuvo la dirección de Freighter. Asegúrate de estar logueado en la extensión.");
+        return addrResult.address;
+      }
+      return result.address;
+    },
     async getAddress() {
       const freighter = await import("@stellar/freighter-api");
       const result = await freighter.getAddress();
       if ("error" in result) throw new Error(result.error);
+      if (!result.address) throw new Error("Freighter no devolvió una dirección. Inicia sesión en la extensión primero.");
       return result.address;
     },
     async signTransaction(txXdr, opts) {
@@ -63,10 +79,13 @@ function createGenericExtensionModule(id: WalletId, name: string, icon: string):
     name,
     icon,
     async isAvailable() {
-      // These wallets inject into window — check at runtime
       if (id === XBULL_ID) return typeof (window as any).xBullSDK !== "undefined";
       if (id === LOBSTR_ID) return typeof (window as any).lobstrSignerExtension !== "undefined";
       return false;
+    },
+    async requestAccess() {
+      // For extensions, requestAccess is the same as getAddress
+      return this.getAddress();
     },
     async getAddress() {
       if (id === XBULL_ID && (window as any).xBullSDK) {
@@ -75,7 +94,7 @@ function createGenericExtensionModule(id: WalletId, name: string, icon: string):
       if (id === LOBSTR_ID && (window as any).lobstrSignerExtension) {
         return (window as any).lobstrSignerExtension.getPublicKey();
       }
-      throw new Error(`${name} no está instalado`);
+      throw new Error(`${name} no está instalado. Instala la extensión y recarga la página.`);
     },
     async signTransaction(txXdr, opts) {
       if (id === XBULL_ID && (window as any).xBullSDK) {
@@ -89,19 +108,21 @@ function createGenericExtensionModule(id: WalletId, name: string, icon: string):
   };
 }
 
-// ── Albedo Module (web-based) ───────────────────────────────
+// ── Albedo Module (web-based, always available) ─────────────
 function createAlbedoModule(): WalletModule {
   return {
     id: ALBEDO_ID,
     name: "Albedo",
     icon: "🌅",
     async isAvailable() {
-      return true;
+      return true; // Web-based, always available
+    },
+    async requestAccess() {
+      return this.getAddress();
     },
     async getAddress() {
-      // Albedo uses a popup window — open it directly
       const w = window.open("https://albedo.link/intent/public-key", "_blank", "width=500,height=600");
-      if (!w) throw new Error("Albedo popup bloqueado");
+      if (!w) throw new Error("Popup bloqueado por el navegador. Permite popups e intenta de nuevo.");
       throw new Error("Albedo requiere interacción manual en albedo.link");
     },
     async signTransaction(_txXdr) {
@@ -136,6 +157,14 @@ export class StellarWalletsKit {
     return mod;
   }
 
+  /** Request access — opens wallet popup for user to approve */
+  async requestAccess(): Promise<{ address: string }> {
+    const mod = this.getSelectedModule();
+    const address = await mod.requestAccess();
+    return { address };
+  }
+
+  /** Get address (only works if already authorized) */
   async getAddress(): Promise<{ address: string }> {
     const mod = this.getSelectedModule();
     const address = await mod.getAddress();
@@ -181,7 +210,7 @@ export const kit = new StellarWalletsKit({
 
 // ── Helpers ─────────────────────────────────────────────────
 export async function getWalletAddress(): Promise<string> {
-  const { address } = await kit.getAddress();
+  const { address } = await kit.requestAccess();
   return address;
 }
 

@@ -119,7 +119,8 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       setIsConnecting(true);
       try {
         kit.setWallet(wId);
-        const { address } = await kit.getAddress();
+        // Use requestAccess to open the wallet popup
+        const { address } = await kit.requestAccess();
         setMode("external");
         setPublicKey(address);
         setWalletId(wId);
