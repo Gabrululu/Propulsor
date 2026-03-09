@@ -323,14 +323,14 @@ const Auth = () => {
           {walletError && (
             <div className="mt-3 p-3 rounded-sm border border-border bg-card">
               <p className="text-xs text-destructive font-mono">{walletError}</p>
-              {walletError.includes("Freighter") && (
+              {walletError.includes("no está instalada") && (
                 <a
-                  href="https://freighter.app"
+                  href={walletInstallUrls[stellarWallets.find(w => walletError.includes(w.name))?.id ?? FREIGHTER_ID]}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="text-xs font-mono text-secondary hover:underline mt-1 inline-block"
                 >
-                  Instalar Freighter →
+                  Instalar extensión →
                 </a>
               )}
             </div>
