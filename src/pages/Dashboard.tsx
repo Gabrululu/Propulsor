@@ -39,7 +39,15 @@ const Dashboard = () => {
   // On-chain vault balances (USDC floats for display)
   const [vaultBalances, setVaultBalances] = useState<number[]>([0, 0, 0]);
   const [balancesLoading, setBalancesLoading] = useState(true);
-  const [recentTxs, setRecentTxs] = useState<typeof mockTxs>([]);
+  const [recentTxs, setRecentTxs] = useState<{
+    type: "split" | "deposit" | "lock" | "withdrawal";
+    description: string;
+    amount: number;
+    vault: string;
+    txHash: string;
+    timestamp: string;
+    status: "confirmed" | "pending";
+  }[]>([]);
 
   // On-chain split rules & lock states
   const [rules, setRules] = useState<SplitRule[]>([]);
