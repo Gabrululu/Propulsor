@@ -60,7 +60,110 @@ export interface LockResult {
 function rpcServer(): S.rpc.Server {
   return new S.rpc.Server(SOROBAN_RPC_URL, { allowHttp: false });
 }
-...
+
+function addressVal(pk: string): S.xdr.ScVal {
+  return new S.Address(pk).toScVal();
+}
+
+/** Encode a SplitRule struct → ScMap (keys sorted alphabetically). */
+function encodeSplitRule(r: SplitRule): S.xdr.ScVal {
+  return S.xdr.ScVal.scvMap([
+    new S.xdr.ScMapEntry({
+      key: S.xdr.ScVal.scvSymbol("percentage"),
+      val: S.nativeToScVal(r.percentage, { type: "u32" }),
+    }),
+    new S.xdr.ScMapEntry({
+      key: S.xdr.ScVal.scvSymbol("vault_id"),
+      val: S.nativeToScVal(r.vault_id, { type: "u32" }),
+    }),
+  ]);
+}
+
+/** Encode Option<u64>: None → ScVoid, Some(n) → U64 */
+function optU64(v: number | null): S.xdr.ScVal {
+  return v !== null
+    ? S.nativeToScVal(BigInt(v), { type: "u64" })
+    : S.xdr.ScVal.scvVoid();
+}
+
+/** Encode Option<i128>: None → ScVoid, Some(n) → I128 */
+function optI128(v: bigint | null): S.xdr.ScVal {
+  return v !== null
+    ? S.nativeToScVal(v, { type: "i128" })
+    : S.xdr.ScVal.scvVoid();
+}
+
+// ── Core: invoke (state-changing) ────────────────────────────
+
+interface InvokeResult {
+  returnValue: S.xdr.ScVal;
+  txHash: string;
+}
+
+async function invoke(
+  contractId: string,
+  method: string,
+  args: S.xdr.ScVal[],
+  publicKey: string,
+  signFn: SignFn,
+  onProgress?: ProgressFn
+): Promise<InvokeResult> {
+  const server = rpcServer();
+
+  onProgress?.("Simulando transacción en Soroban...");
+  const account = await server.getAccount(publicKey);
+  const contract = new S.Contract(contractId);
+
+  const tx = new S.TransactionBuilder(account, {
+    fee: S.BASE_FEE,
+    networkPassphrase: NETWORK_PASSPHRASE,
+  })
+    .addOperation(contract.call(method, ...args))
+    .setTimeout(30)
+    .build();
+
+  const sim = await server.simulateTransaction(tx);
+  if (S.rpc.Api.isSimulationError(sim)) {
+    throw new Error(`Simulación fallida: ${sim.error}`);
+  }
+
+  const assembled = S.rpc.assembleTransaction(tx, sim).build();
+
+  onProgress?.("Firmando con tu clave...");
+  const signedXdr = await signFn(assembled.toXDR());
+
+  onProgress?.("Enviando a Stellar Testnet...");
+  const signedTx = S.TransactionBuilder.fromXDR(signedXdr, NETWORK_PASSPHRASE);
+  const response = await server.sendTransaction(signedTx as S.Transaction);
+
+  if (response.status === "ERROR") {
+    throw new Error(`Envío fallido: ${JSON.stringify(response.errorResult)}`);
+  }
+
+  onProgress?.("Confirmando en el ledger...");
+  let getResponse = await server.getTransaction(response.hash);
+  let attempts = 0;
+  while (getResponse.status === S.rpc.Api.GetTransactionStatus.NOT_FOUND && attempts < 20) {
+    await new Promise((r) => setTimeout(r, 1500));
+    getResponse = await server.getTransaction(response.hash);
+    attempts++;
+  }
+
+  if (getResponse.status !== S.rpc.Api.GetTransactionStatus.SUCCESS) {
+    throw new Error(`Transacción fallida con estado: ${getResponse.status}`);
+  }
+
+  const shortHash = `${response.hash.slice(0, 8)}...${response.hash.slice(-4)}`;
+  onProgress?.(`✓ Ejecutado · ${shortHash}`);
+
+  return {
+    returnValue: getResponse.returnValue ?? S.xdr.ScVal.scvVoid(),
+    txHash: response.hash,
+  };
+}
+
+// ── Core: simulate (read-only) ────────────────────────────────
+
 async function simulate(
   contractId: string,
   method: string,
