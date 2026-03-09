@@ -69,19 +69,33 @@ const Auth = () => {
     // On success Supabase redirects the browser — no further action needed
   };
 
+  const walletInstallUrls: Record<string, string> = {
+    [FREIGHTER_ID]: "https://freighter.app",
+    [XBULL_ID]: "https://xbull.app",
+    [ALBEDO_ID]: "https://albedo.link",
+    [LOBSTR_ID]: "https://lobstr.co",
+  };
+
   const handleWalletLogin = async (walletId: WalletId) => {
+    const walletName = stellarWallets.find(w => w.id === walletId)?.name ?? walletId;
     setWalletLoading(walletId);
     setWalletError("");
 
     try {
-      // Check availability for Freighter
-      if (walletId === FREIGHTER_ID) {
-        const available = await kit.isAvailable(FREIGHTER_ID);
-        if (!available) {
-          setWalletError("Freighter no está instalado. Instálalo desde freighter.app");
-          setWalletLoading(null);
-          return;
-        }
+      // Check availability for all wallets first
+      const available = await kit.isAvailable(walletId);
+      if (!available) {
+        const url = walletInstallUrls[walletId];
+        toast.error(`${walletName} no detectada`, {
+          description: `Instala la extensión desde ${url}`,
+          action: url
+            ? { label: "Instalar →", onClick: () => window.open(url, "_blank") }
+            : undefined,
+          duration: 6000,
+        });
+        setWalletError(`${walletName} no está instalada.`);
+        setWalletLoading(null);
+        return;
       }
 
       kit.setWallet(walletId);
@@ -98,7 +112,7 @@ const Auth = () => {
       });
 
       if (signInError) {
-        // If sign-in fails, create account (auto-confirm since wallet proves identity)
+        // If sign-in fails, create account
         const { error: signUpError } = await supabase.auth.signUp({
           email: syntheticEmail,
           password: syntheticPassword,
@@ -119,18 +133,41 @@ const Auth = () => {
         });
 
         if (retryError) {
-          // Account created but needs email verification
           toast.info("Cuenta creada. Por seguridad, verifica tu correo para continuar.");
           setWalletLoading(null);
           return;
         }
       }
 
-      toast.success(`Conectado con ${stellarWallets.find(w => w.id === walletId)?.name}`);
+      toast.success(`Conectado con ${walletName}`);
       navigate("/onboarding");
     } catch (err: any) {
       console.error("Wallet auth error:", err);
-      setWalletError(err?.message || "No se pudo conectar la wallet");
+      const msg = err?.message || "No se pudo conectar la wallet";
+
+      // Friendly messages for common errors
+      if (msg.includes("no está instalado") || msg.includes("not installed")) {
+        toast.error(`${walletName} no está instalada`, {
+          description: "Asegúrate de tener la extensión activa y recarga la página.",
+          duration: 5000,
+        });
+      } else if (msg.includes("popup") || msg.includes("bloqueado")) {
+        toast.error("Popup bloqueado", {
+          description: "Permite popups en tu navegador e intenta de nuevo.",
+          duration: 5000,
+        });
+      } else if (msg.includes("User declined") || msg.includes("rejected") || msg.includes("cancelled")) {
+        toast.warning("Conexión cancelada", {
+          description: "Aceptá la solicitud en tu wallet para continuar.",
+          duration: 4000,
+        });
+      } else {
+        toast.error(`Error con ${walletName}`, {
+          description: msg,
+          duration: 5000,
+        });
+      }
+      setWalletError(msg);
     } finally {
       setWalletLoading(null);
     }
