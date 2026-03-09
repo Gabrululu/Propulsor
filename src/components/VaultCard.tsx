@@ -14,6 +14,7 @@ interface VaultCardProps {
   colorVariant: "pink" | "mint" | "pink-soft";
   onLock?: () => void;
   onRelease?: () => void;
+  onAdd?: () => void;
 }
 
 const colorTextMap = {
