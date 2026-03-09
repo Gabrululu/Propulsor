@@ -6,7 +6,10 @@ import { useStellarBalance } from "@/hooks/useStellarBalance";
 import { getHorizonServer } from "@/lib/stellar/client";
 import { useContracts } from "@/hooks/useContracts";
 import { useWallet } from "@/lib/stellar/WalletContext";
+import { useAuth } from "@/hooks/useAuth";
+import { supabase } from "@/integrations/supabase/client";
 import { stroopsToUsdc, usdcToStroops } from "@/lib/stellar/contracts";
+import type { SplitRule, VaultLock } from "@/lib/stellar/contracts";
 import { toast } from "@/hooks/use-toast";
 
 // Terminal progress messages shown while a split is executing
@@ -25,14 +28,23 @@ const VAULT_META = [
 
 const Dashboard = () => {
   const { publicKey, mode } = useWallet();
+  const { user } = useAuth();
   const contracts = useContracts();
   const { balance } = useStellarBalance(publicKey);
   const streamRef = useRef<(() => void) | null>(null);
+
+  // User profile name
+  const [userName, setUserName] = useState<string>("");
 
   // On-chain vault balances (USDC floats for display)
   const [vaultBalances, setVaultBalances] = useState<number[]>([0, 0, 0]);
   const [balancesLoading, setBalancesLoading] = useState(true);
   const [recentTxs, setRecentTxs] = useState<typeof mockTxs>([]);
+
+  // On-chain split rules & lock states
+  const [rules, setRules] = useState<SplitRule[]>([]);
+  const [locks, setLocks] = useState<(VaultLock | null)[]>([null, null, null]);
+  const [releaseFlags, setReleaseFlags] = useState<boolean[]>([false, false, false]);
 
   // Execute-split modal state
   const [showSplitModal, setShowSplitModal] = useState(false);
@@ -42,16 +54,45 @@ const Dashboard = () => {
   const [splitProgress, setSplitProgress] = useState("");
   const [splitError, setSplitError] = useState("");
 
-  // ── Load balances from chain ─────────────────────────────
+  // ── Load profile name ────────────────────────────────────
+  useEffect(() => {
+    if (!user?.id) return;
+    supabase
+      .from("users_profile")
+      .select("name")
+      .eq("id", user.id)
+      .single()
+      .then(({ data }) => {
+        if (data?.name) setUserName(data.name);
+      });
+  }, [user?.id]);
+
+  // ── Load balances + rules + locks from chain ─────────────
   const loadBalances = useCallback(async () => {
     if (!publicKey) { setBalancesLoading(false); return; }
     try {
-      const bals = await contracts.getBalances();
+      const [bals, chainRules] = await Promise.all([
+        contracts.getBalances(),
+        contracts.getRules(),
+      ]);
+
       const arr = [0, 0, 0];
       bals.forEach((b) => { if (b.vault_id <= 2) arr[b.vault_id] = stroopsToUsdc(b.balance); });
       setVaultBalances(arr);
+
+      if (chainRules.length > 0) setRules(chainRules);
+
+      // Fetch lock states for each vault
+      const lockPromises = [0, 1, 2].map((id) => contracts.getLock(id));
+      const releasePromises = [0, 1, 2].map((id) => contracts.checkRelease(id));
+      const [lockResults, releaseResults] = await Promise.all([
+        Promise.all(lockPromises),
+        Promise.all(releasePromises),
+      ]);
+      setLocks(lockResults);
+      setReleaseFlags(releaseResults);
     } catch {
-      // Keep previous values — Supabase remains source of truth on RPC failure
+      // Keep previous values on RPC failure
     } finally {
       setBalancesLoading(false);
     }
