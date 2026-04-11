@@ -14,6 +14,97 @@ export type Database = {
   }
   public: {
     Tables: {
+      agent_activity: {
+        Row: {
+          amount_usdc: number | null
+          blend_success: boolean | null
+          blend_tx_hash: string | null
+          created_at: string | null
+          error_message: string | null
+          event_type: string
+          id: string
+          tx_hash: string | null
+          user_id: string | null
+          vault_breakdown: Json | null
+        }
+        Insert: {
+          amount_usdc?: number | null
+          blend_success?: boolean | null
+          blend_tx_hash?: string | null
+          created_at?: string | null
+          error_message?: string | null
+          event_type: string
+          id?: string
+          tx_hash?: string | null
+          user_id?: string | null
+          vault_breakdown?: Json | null
+        }
+        Update: {
+          amount_usdc?: number | null
+          blend_success?: boolean | null
+          blend_tx_hash?: string | null
+          created_at?: string | null
+          error_message?: string | null
+          event_type?: string
+          id?: string
+          tx_hash?: string | null
+          user_id?: string | null
+          vault_breakdown?: Json | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agent_activity_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users_profile"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      agent_status: {
+        Row: {
+          id: string
+          is_active: boolean | null
+          last_heartbeat: string | null
+          last_split_at: string | null
+          total_splits: number | null
+          total_yield_usdc: number | null
+          updated_at: string | null
+          user_id: string | null
+          watched_account: string | null
+        }
+        Insert: {
+          id?: string
+          is_active?: boolean | null
+          last_heartbeat?: string | null
+          last_split_at?: string | null
+          total_splits?: number | null
+          total_yield_usdc?: number | null
+          updated_at?: string | null
+          user_id?: string | null
+          watched_account?: string | null
+        }
+        Update: {
+          id?: string
+          is_active?: boolean | null
+          last_heartbeat?: string | null
+          last_split_at?: string | null
+          total_splits?: number | null
+          total_yield_usdc?: number | null
+          updated_at?: string | null
+          user_id?: string | null
+          watched_account?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agent_status_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: true
+            referencedRelation: "users_profile"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       users_profile: {
         Row: {
           created_at: string | null

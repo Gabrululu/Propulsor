@@ -3,6 +3,7 @@ import DashboardLayout from "@/components/DashboardLayout";
 import SplitBar from "@/components/SplitBar";
 import TxRow from "@/components/TxRow";
 import AgentStatusCard from "@/components/agent/AgentStatusCard";
+import AgentActivityFeed from "@/components/agent/AgentActivityFeed";
 import { useStellarBalance } from "@/hooks/useStellarBalance";
 import { useAgentStatus } from "@/hooks/useAgentStatus";
 import { getHorizonServer } from "@/lib/stellar/client";
@@ -199,7 +200,7 @@ const Dashboard = () => {
     try {
       const result = await triggerManualSplit({
         userPublicKey: publicKey,
-        incomeAmount: usdcToStroops(usdc),
+        incomeAmount: Number(usdcToStroops(usdc)),
       });
       setAgentResult(result);
       toast({ title: "🤖 Split ejecutado vía agente", description: `Tx: ${result.txHash.slice(0, 8)}...` });
@@ -312,8 +313,9 @@ const Dashboard = () => {
           </div>
         </div>
 
-        {/* Agent status */}
+        {/* Agent status + activity feed */}
         <AgentStatusCard />
+        <AgentActivityFeed />
 
         {/* Agent manual trigger — only when agent server is online */}
         {agentOnline && (
