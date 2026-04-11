@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <!-- Background -->
+  <rect width="64" height="64" fill="#1e1a1b" rx="10"/>
+
+  <!-- Three vault bars matching the logo concept -->
+  <!-- Left bar -->
+  <rect x="9"  y="30" width="11" height="22" fill="#ffb3c6" rx="2"/>
+  <!-- Center bar (tallest) -->
+  <rect x="26" y="16" width="12" height="36" fill="#ffb3c6" rx="2"/>
+  <!-- Right bar -->
+  <rect x="44" y="22" width="11" height="30" fill="#ffb3c6" rx="2"/>
+
+  <!-- Mint arc at the bottom (circuit bowl) -->
+  <path d="M7 54 Q32 46 57 54" stroke="#b8f0c8" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+</svg>
