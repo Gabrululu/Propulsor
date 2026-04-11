@@ -9,9 +9,12 @@ export const NETWORK_PASSPHRASE = "Test SDF Network ; September 2015";
 export const USDC_ASSET_CODE = "USDC";
 export const USDC_ISSUER = "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5";
 
-// Contract IDs from env (empty = simulation mode)
-export const SPLIT_CONTRACT_ID = import.meta.env.VITE_SPLIT_CONTRACT_ID || "";
-export const VAULT_CONTRACT_ID = import.meta.env.VITE_VAULT_CONTRACT_ID || "";
+// Contract IDs — Soroban Testnet deployments
+// Fallback to env vars for local override, but default to deployed contract IDs
+export const SPLIT_CONTRACT_ID =
+  import.meta.env.VITE_SPLIT_CONTRACT_ID || "CCRH4EPUVIPESWYWOWPQ2QK3XN6KBR3RY6UFK36A4MXKKXIFH6ONRTVY";
+export const VAULT_CONTRACT_ID =
+  import.meta.env.VITE_VAULT_CONTRACT_ID || "CC73UGT72A2MOZOSK6WFWMMIL32OJPJSPKEBFNBLK2GZJYNORERTSSWX";
 export const isSimulationMode = !SPLIT_CONTRACT_ID;
 
 // Lazy-loaded server instances to avoid top-level SDK access issues
