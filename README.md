@@ -15,6 +15,153 @@ Propulsor is a programmable financial management platform for women in the infor
 
 ---
 
+## 🤖 Agentic Payments Layer *(Stellar Hackathon)*
+
+Propulsor now includes a fully autonomous payments agent built on the **x402 protocol**. When a remittance arrives at any hour of the day, the agent detects it via Horizon streaming, pays its own 0.01 USDC fee to trigger the x402-protected split endpoint, and executes the on-chain distribution — all without any user interaction. The savings vault (vault_2) is then automatically deposited into **Blend Protocol** to start earning yield immediately, before social or family pressure has any chance to redirect the funds.
+
+---
+
+## 🏗️ Architecture *(Updated)*
+
+```
+Remittance arrives (USDC on Stellar Testnet)
+         │
+         ▼
+  Horizon Streaming ──► Agent Monitor (monitor.ts)
+                                  │
+                          x402 Payment Flow
+                          (agent self-pays 0.01 USDC fee)
+                                  │
+                                  ▼
+                        POST /execute-split  (server.ts)
+                                  │
+                                  ▼
+                      SplitProtocol Contract (Soroban)
+                      ├── vault_0: spending    60%
+                      ├── vault_1: emergency   30%
+                      └── vault_2: savings     10%
+                                                │
+                                                ▼
+                                     Blend Protocol (blend.ts)
+                                     └── deposit → bTokens → yield
+```
+
+**Original flow** (React frontend) remains unchanged — users can still trigger splits manually and manage vaults through the UI.
+
+---
+
+## ⚡ Agent Setup & Running
+
+### Prerequisites
+
+- Node.js ≥ 22
+- A funded Stellar Testnet keypair with a USDC trustline (see steps below)
+
+### Step 1 — Generate a keypair
+
+Open [Stellar Lab → Keypair Generator](https://lab.stellar.org/keypair-generator) and click **Generate Keypair**. Save the **Secret Key** (starts with `S`) and the **Public Key** (starts with `G`).
+
+### Step 2 — Fund with Testnet XLM
+
+Go to [Stellar Lab → Create Account](https://lab.stellar.org/account/create), enter your Public Key, and click **Create Account** (uses Friendbot — gives 10,000 XLM).
+
+### Step 3 — Add a USDC trustline
+
+1. Open [Stellar Lab → Build Transaction](https://lab.stellar.org/transaction/build)
+2. Source Account: your Public Key
+3. Add operation → **Change Trust**
+4. Asset Code: `USDC` — Issuer: `GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5`
+5. Sign with your Secret Key and submit
+
+Then get testnet USDC from the [Circle Testnet Faucet](https://faucet.circle.com/).
+
+### Step 4 — Configure environment variables
+
+```bash
+cd agent
+cp .env.example .env   # or create .env manually
+```
+
+Minimum required variables:
+
+```env
+SERVER_STELLAR_SECRET=S...   # keypair from Step 1 (server + agent)
+WATCHED_ACCOUNT=G...         # Stellar address to watch for USDC payments
+
+# Optional — enables automatic Blend yield on vault_2
+VAULT2_PUBLIC_KEY=G...
+VAULT2_SECRET=S...
+BLEND_POOL_ID=C...           # get from testnet.blend.capital
+```
+
+See [`agent/README.md`](./agent/README.md) for the full variable reference and Blend setup instructions.
+
+### Step 5 — Install & run
+
+```bash
+cd agent
+npm install
+
+# One-time: register split rules on-chain (60/30/10)
+npm run setup
+```
+
+Then in two terminals:
+
+```bash
+# Terminal 1 — x402-protected split server
+npm run dev
+
+# Terminal 2 — autonomous payment monitor
+npm run monitor
+```
+
+**Expected output after a USDC payment arrives:**
+
+```
+──────────────────────────────────────────────────────────
+  USDC PAYMENT DETECTED
+──────────────────────────────────────────────────────────
+  From:    GABC...    Amount: 10.0000000 USDC
+
+──────────────────────────────────────────────────────────
+  SPLIT EXECUTED SUCCESSFULLY
+──────────────────────────────────────────────────────────
+  Vault 0: 60000000 stroops  (6.0000000 USDC)
+  Vault 1: 30000000 stroops  (3.0000000 USDC)
+  Vault 2: 10000000 stroops  (1.0000000 USDC)
+
+──────────────────────────────────────────────────────────
+  BLEND DEPOSIT — vault_2 savings
+──────────────────────────────────────────────────────────
+  💰 vault_2: 1.0000000 USDC deposited to Blend → earning yield
+  Blend txHash: def456...
+```
+
+---
+
+## 🏆 Hackathon Context
+
+Propulsor was originally built for **She Ships 2026**, a 48-hour global hackathon celebrating International Women's Day (March 6–8, 2026), focused on financial tools for women in the informal economy in Latin America.
+
+It was subsequently extended for the **Stellar Agentic Payments Hackathon** with the addition of the x402-powered autonomous agent. The agentic layer directly addresses the core problem: remittances arrive at unpredictable hours and the window to protect the money before external pressures redirect it can be minutes, not days. The agent closes that window to zero — the split happens the moment the payment lands on-chain, without requiring the user to be present or take any action.
+
+The architecture is testnet-grade for the demo and mainnet-ready in design.
+
+---
+
+## ⚠️ Known Limitations & Future Work
+
+| Item | Status | Notes |
+|---|---|---|
+| Blend deposit | Best-effort | Falls back gracefully if testnet pool is unavailable; vault_2 held in Stellar account |
+| Secret key management | Simplified for demo | Production requires HSM or MPC wallet — never store raw secrets in `.env` |
+| SEP-24 fiat on-ramp | Pending | Anchor integration needed for direct fiat → USDC deposit flow |
+| Stellar Mainnet | Pending | Contracts and agent are mainnet-ready; keypair + anchor coordination outstanding |
+| Blend withdrawal | Not implemented | Deposit-only for the demo scope; withdrawal follows the same `submit()` pattern |
+
+---
+
 ## Tech Stack
 
 | Layer | Technology |
@@ -31,7 +178,7 @@ Propulsor is a programmable financial management platform for women in the infor
 
 ---
 
-## Architecture
+## Frontend Architecture
 
 ```
 User
@@ -291,12 +438,25 @@ Rules
 | Stellar SDK layer | ✅ Complete |
 | ElevenLabs voice | ✅ Complete |
 | Soroban contracts (Rust) | ✅ Deployed Testnet |
-| SEP-24 Real Anchor | 🔜 Post-hackathon |
+| x402 split server (`server.ts`) | ✅ Complete |
+| Autonomous agent (`monitor.ts`) | ✅ Complete |
+| Blend yield integration (`blend.ts`) | ✅ Complete (best-effort) |
+| SEP-24 fiat on-ramp | 🔜 Post-hackathon |
 | Stellar Mainnet | 🔜 Post-hackathon |
 
 ---
 
-## Deployed Contracts (Stellar Testnet)
+## 📦 Deployed Contracts (Stellar Testnet)
+
+### Network & Infrastructure
+
+| Item | Value |
+|---|---|
+| **Network** | Stellar Testnet |
+| **Soroban RPC** | `https://soroban-testnet.stellar.org` |
+| **Horizon** | `https://horizon-testnet.stellar.org` |
+| **USDC Issuer** | `GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5` *(Circle Testnet)* |
+| **x402 Facilitator** | `https://www.x402.org/facilitator` |
 
 ### SplitProtocol
 
@@ -343,16 +503,10 @@ stellar contract invoke \
 
 ---
 
-## Context: She Ships Hackathon
-
-**She Ships** is a 48-hour global hackathon celebrating International Women's Day (March 6–8, 2026).
-
----
-
 ## Team
 
-Built with 💜 in Lima, Peru — She Ships 2026.
+Built with 💜 in Lima, Peru.
 
 ---
 
-*Built on Stellar · Powered by Soroban · She Ships 2026 💜*
+*Built on Stellar · Powered by Soroban · She Ships 2026 + Stellar Agentic Payments Hackathon 💜*

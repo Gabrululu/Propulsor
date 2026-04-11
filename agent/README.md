@@ -236,6 +236,9 @@ WATCHED_ACCOUNT=G<user-key> AGENT_SECRET=S<agent-secret> npm run monitor
 | `WATCHED_ACCOUNT` | *(required)* | Stellar public key to watch for incoming USDC |
 | `AGENT_SECRET` | `SERVER_STELLAR_SECRET` | Keypair that pays the 0.01 USDC x402 fee |
 | `AGENT_SERVER_URL` | `http://localhost:3001` | URL of the running agent server |
+| `VAULT2_PUBLIC_KEY` | *(optional)* | Stellar public key of the vault_2 (savings) account |
+| `VAULT2_SECRET` | *(optional)* | Stellar secret key of the vault_2 account (must hold USDC) |
+| `BLEND_POOL_ID` | *(see Blend setup)* | Blend lending pool contract ID on Stellar Testnet |
 
 ### Sample console output
 
@@ -276,6 +279,138 @@ WATCHED_ACCOUNT=G<user-key> AGENT_SECRET=S<agent-secret> npm run monitor
 ### Auto-reconnect
 
 If the Horizon stream disconnects, the monitor automatically reconnects after 5 seconds.
+
+---
+
+## Blend Protocol integration
+
+After every successful split, the monitor automatically deposits vault_2's USDC allocation into [Blend Protocol](https://blend.capital) so it earns yield on Stellar Testnet. This is **optional and best-effort** — if the pool is unavailable or the env vars are missing, the split still completes normally and vault_2 stays in the Stellar account.
+
+```
+Horizon stream → USDC payment detected
+  → split executed (vault_0: 60%, vault_1: 30%, vault_2: 10%)
+  → depositToBlend(VAULT2_PUBLIC_KEY, vault_2_amount)
+  → Blend pool.submit([SupplyCollateral(USDC, amount)])
+  → 💰 vault_2: 1.0000000 USDC deposited to Blend → earning yield
+```
+
+### Variables to add to `.env`
+
+```env
+# ── Blend Protocol (vault_2 yield) ────────────────────────────────────────────
+
+# Stellar account for vault_2 (savings). Must be funded + have a USDC trustline.
+# Can be the same keypair as SERVER_STELLAR_SECRET for a quick demo, or a
+# dedicated account for isolation (recommended).
+VAULT2_PUBLIC_KEY=G...
+VAULT2_SECRET=S...
+
+# Blend lending pool contract ID on Stellar Testnet.
+# How to get it: see step 2 below.
+BLEND_POOL_ID=C...
+```
+
+---
+
+### Step-by-step setup
+
+#### Step 1 — Create a vault_2 Stellar account
+
+vault_2 needs its own funded Stellar account with a USDC trustline. Follow the same steps as the main server account (Steps 1–4 at the top of this README) with a fresh keypair.
+
+> **Quick shortcut for demos:** You can reuse `SERVER_STELLAR_SECRET` / its public key as `VAULT2_SECRET` / `VAULT2_PUBLIC_KEY`. The account already has XLM and USDC. The only trade-off is that vault_2 deposits come from the same address that runs the server.
+
+---
+
+#### Step 2 — Get the Blend pool contract ID
+
+**Option A — Blend testnet UI (easiest)**
+
+1. Open **[testnet.blend.capital](https://testnet.blend.capital)**
+2. Connect any wallet (or browse without connecting)
+3. Click on a pool that includes **USDC** (e.g. "Stellar" pool)
+4. Copy the contract address from the URL or the pool info panel — it starts with `C` and is 56 characters long
+
+**Option B — Blend GitHub deployment files**
+
+The `blend-capital/blend-utils` repo publishes testnet deployment addresses:
+
+```
+https://github.com/blend-capital/blend-utils
+  └── deployments/
+        └── testnet.json   ← pool contract IDs are listed here
+```
+
+Look for a pool entry that includes the USDC reserve. The contract ID is the value under `"id"` for that pool.
+
+**Option C — ya-otter-save reference**
+
+The [ya-otter-save](https://github.com/briwylde08/ya-otter-save) project (one of the reference implementations for this integration) has the testnet pool ID hardcoded — check its `.env.example` or constants file.
+
+---
+
+#### Step 3 — Add USDC trustline for vault_2
+
+If vault_2 is a new dedicated account, add a USDC trustline before running the monitor:
+
+1. **[Stellar Lab → Build Transaction](https://lab.stellar.org/transaction/build)**
+2. Source Account: `VAULT2_PUBLIC_KEY`
+3. Add operation → **Change Trust**
+4. Asset Code: `USDC` — Issuer: `GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5`
+5. Sign with `VAULT2_SECRET` and submit
+
+Then fund it with testnet USDC from **[faucet.circle.com](https://faucet.circle.com/)**.
+
+---
+
+#### Step 4 — Run the monitor
+
+```bash
+npm run monitor
+```
+
+If configured correctly, the startup log will show:
+
+```
+  Blend deposit:     enabled (vault_2 = GABC1234...)
+```
+
+And after each split:
+
+```
+──────────────────────────────────────────────────────────
+  BLEND DEPOSIT — vault_2 savings
+──────────────────────────────────────────────────────────
+[...] Depositing 1.0000000 USDC from vault_2 into Blend lending pool...
+[...] 💰 vault_2: 1.0000000 USDC deposited to Blend → earning yield
+[...] Blend txHash:       abc123...
+[...] bTokens received:   10000000
+```
+
+If Blend is unreachable or the pool ID is wrong:
+
+```
+[...] ⚠️  Blend unavailable, vault_2 held in Stellar account
+[...] (Blend simulation failed: ...)
+```
+
+The split is **not affected** — vault_2 balance stays in the Stellar account.
+
+---
+
+### How `blend.ts` works internally
+
+`src/blend.ts` calls the Blend pool's `submit()` Soroban function directly using the already-installed `@stellar/stellar-sdk` — no extra dependencies needed.
+
+```
+submit(from, spender, to, requests)
+  requests = [{ request_type: 0 (SupplyCollateral), address: USDC_SAC, amount }]
+```
+
+- **USDC SAC** is derived automatically via `asset.contractId(Networks.TESTNET)` — no hardcoded contract address
+- Simulates → assembles footprint → signs → submits → polls for confirmation (up to 30 s)
+- Returns `{ success, txHash, blendTokensReceived }`
+- Throws on failure so `monitor.ts` can catch and fall back
 
 ---
 

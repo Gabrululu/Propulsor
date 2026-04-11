@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import DashboardLayout from "@/components/DashboardLayout";
 import SplitBar from "@/components/SplitBar";
 import TxRow from "@/components/TxRow";
+import AgentStatusCard from "@/components/agent/AgentStatusCard";
 import { useStellarBalance } from "@/hooks/useStellarBalance";
 import { getHorizonServer } from "@/lib/stellar/client";
 import { useContracts } from "@/hooks/useContracts";
@@ -239,6 +240,9 @@ const Dashboard = () => {
           </div>
         </div>
 
+        {/* Agent status */}
+        <AgentStatusCard />
+
         {/* Vault mini-cards */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
           {VAULT_META.map((v, i) => {
@@ -287,6 +291,16 @@ const Dashboard = () => {
                   <p className="text-xs font-mono text-dimmed mt-1">
                     Meta: ${stroopsToUsdc(lock.goal_amount).toFixed(2)} · {((vaultBalances[i] / stroopsToUsdc(lock.goal_amount)) * 100).toFixed(0)}%
                   </p>
+                )}
+
+                {/* vault_2 — Blend yield integration indicator */}
+                {i === 2 && (
+                  <div className="flex items-center gap-1 mt-2">
+                    <span className="text-[0.6rem]">💰</span>
+                    <span className="font-mono text-[0.55rem] text-mint uppercase tracking-wider">
+                      Blend · yield automático
+                    </span>
+                  </div>
                 )}
               </div>
             );

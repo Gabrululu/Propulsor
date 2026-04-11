@@ -12,6 +12,8 @@ interface VaultCardProps {
   canRelease?: boolean;   // lock conditions are met → allow withdraw
   timeRemaining?: number; // seconds; 0 = no time condition
   colorVariant: "pink" | "mint" | "pink-soft";
+  /** vault_2 (savings): show Blend Protocol yield integration badge */
+  blendEnabled?: boolean;
   onLock?: () => void;
   onRelease?: () => void;
   onAdd?: () => void;
@@ -34,6 +36,7 @@ const VaultCard = ({
   canRelease,
   timeRemaining = 0,
   colorVariant,
+  blendEnabled = false,
   onLock,
   onRelease,
   onAdd,
@@ -80,6 +83,16 @@ const VaultCard = ({
         </span>
         <span className="text-body-muted text-sm ml-2">USDC</span>
       </div>
+
+      {/* Blend yield badge — shown on vault_2 (savings) */}
+      {blendEnabled && (
+        <div className="flex items-center gap-1.5 mb-3 py-1.5 px-2 rounded-sm border border-mint/20 bg-mint/5 w-fit">
+          <span className="text-xs">💰</span>
+          <span className="font-mono text-[0.65rem] text-mint uppercase tracking-wider">
+            Blend · yield automático
+          </span>
+        </div>
+      )}
 
       {/* Progress bar */}
       <SplitBar

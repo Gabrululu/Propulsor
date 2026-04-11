@@ -22,6 +22,7 @@ import {
   decodePaymentRequiredHeader,
   encodePaymentSignatureHeader,
 } from '@x402/core/http';
+import { depositToBlend } from './blend.js';
 
 // ---------------------------------------------------------------------------
 // Config
@@ -35,6 +36,11 @@ const RECONNECT_DELAY_MS = 5_000;
 
 const WATCHED_ACCOUNT = process.env.WATCHED_ACCOUNT ?? '';
 const AGENT_SECRET = process.env.AGENT_SECRET ?? process.env.SERVER_STELLAR_SECRET ?? '';
+
+// vault_2 (savings) Blend integration — optional.
+// If set, vault_2's USDC allocation is deposited into Blend after every split.
+const VAULT2_PUBLIC_KEY = process.env.VAULT2_PUBLIC_KEY ?? '';
+const VAULT2_SECRET = process.env.VAULT2_SECRET ?? '';
 
 if (!WATCHED_ACCOUNT) {
   console.error('[monitor] ERROR: WATCHED_ACCOUNT env variable is required.');
@@ -199,6 +205,32 @@ function startStream(): () => void {
             log(`    Vault ${vault.vaultId}: ${vault.balance} stroops  (${usdcAmount} USDC)`);
           }
           log('');
+
+          // ── Blend deposit: vault_2 (savings) earns yield ─────────────────
+          if (VAULT2_SECRET && VAULT2_PUBLIC_KEY) {
+            const vault2 = result.vaultBreakdown.find((v) => v.vaultId === 2);
+            const vault2Stroops = vault2 ? Number(vault2.balance) : 0;
+
+            if (vault2Stroops > 0) {
+              logSection('BLEND DEPOSIT — vault_2 savings');
+              const vault2Usdc = (vault2Stroops / 10_000_000).toFixed(7);
+              log(`  Depositing ${vault2Usdc} USDC from vault_2 into Blend lending pool...`);
+              try {
+                const blendResult = await depositToBlend({
+                  userPublicKey: VAULT2_PUBLIC_KEY,
+                  userSecret: VAULT2_SECRET,
+                  amount: vault2Stroops,
+                });
+                log(`  💰 vault_2: ${vault2Usdc} USDC deposited to Blend → earning yield`);
+                log(`  Blend txHash:       ${blendResult.txHash}`);
+                log(`  bTokens received:   ${blendResult.blendTokensReceived}`);
+              } catch (blendErr) {
+                log('  ⚠️  Blend unavailable, vault_2 held in Stellar account');
+                log(`  (${blendErr instanceof Error ? blendErr.message : String(blendErr)})`);
+              }
+              log('');
+            }
+          }
         } catch (err) {
           logSection('SPLIT FAILED');
           log(`  Error: ${err instanceof Error ? err.message : String(err)}`);
@@ -228,6 +260,7 @@ log(`  Agent address:     ${agentAddress}`);
 log(`  x402 server:       ${AGENT_SERVER_URL}`);
 log(`  USDC issuer:       ${USDC_ISSUER.slice(0, 8)}...`);
 log(`  Network:           Stellar Testnet`);
+log(`  Blend deposit:     ${VAULT2_SECRET && VAULT2_PUBLIC_KEY ? `enabled (vault_2 = ${VAULT2_PUBLIC_KEY.slice(0, 8)}...)` : 'disabled (set VAULT2_PUBLIC_KEY + VAULT2_SECRET to enable)'}`);
 log('');
 log('Waiting for incoming USDC payments...');
 log('');
