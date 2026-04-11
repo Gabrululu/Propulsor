@@ -4,7 +4,7 @@ import TerminalBlock from "../TerminalBlock";
 const vaults = [
   { icon: "🏠", name: "Hogar", pct: 60, color: "pink" as const, desc: "Gastos del día a día, comida, servicios" },
   { icon: "🔒", name: "Fondo seguro", pct: 30, color: "mint" as const, desc: "Emergencias, salud, imprevistos" },
-  { icon: "🚀", name: "Meta grande", pct: 10, color: "pink-soft" as const, desc: "Tu sueño: negocio, casa, educación" },
+  { icon: "🚀", name: "Meta grande", pct: 10, color: "pink-soft" as const, desc: "Tu sueño: negocio, casa, educación — rinde en Blend Protocol automáticamente." },
 ];
 
 const colorBorder = {
@@ -36,6 +36,9 @@ const terminalLines = [
   { text: "", color: "default" as const },
   { text: "→ Split ejecutado: 3 bóvedas activas", color: "mint" as const },
   { text: "→ Tx: GBPROPULSOR...XF9A ✓", color: "mint" as const },
+  { text: "", color: "default" as const },
+  { text: "// agente: depositando meta en Blend...", color: "dimmed" as const },
+  { text: "→ vault_2: 1.0000000 USDC → Blend yield ✓", color: "mint" as const },
 ];
 
 const VaultsSection = () => {

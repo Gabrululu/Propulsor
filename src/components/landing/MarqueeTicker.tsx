@@ -8,7 +8,10 @@ const MarqueeTicker = () => {
     { text: "SEP-24 Anchors", color: "mint" },
     { text: "USDC", color: "pink" },
     { text: "Soles → Dólares", color: "mint" },
-    { text: "She Ships 2026 💜", color: "pink" },
+    { text: "Agente Autónomo", color: "pink" },
+    { text: "x402 Payments", color: "mint" },
+    { text: "Blend Protocol", color: "pink" },
+    { text: "She Ships 2026 💜", color: "mint" },
   ];
 
   const row = items.map((item, i) => (

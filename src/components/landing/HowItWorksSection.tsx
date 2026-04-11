@@ -22,6 +22,13 @@ const steps = [
     tagColor: "pink" as const,
     description: "Tus bóvedas guardan, bloquean o acumulan tu dinero según tus reglas. Sin intermediarios.",
   },
+  {
+    index: "04",
+    title: "El agente lo protege",
+    tag: "x402 · AGENTE",
+    tagColor: "mint" as const,
+    description: "Un agente autónomo vigila tu cuenta 24/7. Detecta cada remesa entrante y ejecuta el split al instante — sin que toques nada.",
+  },
 ];
 
 const tagBg = {

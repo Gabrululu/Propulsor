@@ -57,7 +57,7 @@ const HeroSection = () => {
           transition={{ duration: 0.6 }}
           className="font-mono text-xs text-body-muted tracking-widest mb-8"
         >
-          Independencia financiera · Stellar Network · LATAM
+          Independencia financiera · Stellar Network · x402 · LATAM
         </motion.p>
 
         {/* Main headline */}
