@@ -4,6 +4,7 @@ import SplitBar from "@/components/SplitBar";
 import TxRow from "@/components/TxRow";
 import AgentStatusCard from "@/components/agent/AgentStatusCard";
 import { useStellarBalance } from "@/hooks/useStellarBalance";
+import { useAgentStatus } from "@/hooks/useAgentStatus";
 import { getHorizonServer } from "@/lib/stellar/client";
 import { useContracts } from "@/hooks/useContracts";
 import { useWallet } from "@/lib/stellar/WalletContext";
@@ -12,6 +13,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { stroopsToUsdc, usdcToStroops } from "@/lib/stellar/contracts";
 import type { SplitRule, VaultLock } from "@/lib/stellar/contracts";
 import { toast } from "@/hooks/use-toast";
+import { triggerManualSplit } from "@/lib/agent/client";
+import type { AgentSplitResult } from "@/lib/agent/client";
 
 // Terminal progress messages shown while a split is executing
 const SPLIT_STEPS = [
@@ -62,6 +65,13 @@ const Dashboard = () => {
   const [splitting, setSplitting] = useState(false);
   const [splitProgress, setSplitProgress] = useState("");
   const [splitError, setSplitError] = useState("");
+
+  // Agent manual trigger state
+  const { isOnline: agentOnline } = useAgentStatus();
+  const [agentAmount, setAgentAmount] = useState("");
+  const [agentLoading, setAgentLoading] = useState(false);
+  const [agentResult, setAgentResult] = useState<AgentSplitResult | null>(null);
+  const [agentError, setAgentError] = useState("");
 
   // ── Load profile name ────────────────────────────────────
   useEffect(() => {
@@ -139,6 +149,68 @@ const Dashboard = () => {
     setupStream();
     return () => { if (streamRef.current) streamRef.current(); };
   }, [publicKey, loadBalances]);
+
+  // ── Supabase realtime: agent split activity ──────────────
+  useEffect(() => {
+    if (!user?.id) return;
+    const channel = supabase
+      .channel("agent-activity")
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "transactions",
+          filter: `user_id=eq.${user.id}`,
+        },
+        (payload) => {
+          const tx = payload.new as {
+            description?: string;
+            amount_usdc?: number;
+            stellar_tx_hash?: string;
+          };
+          if (!tx.description?.startsWith("🤖")) return;
+          setRecentTxs((prev) => [
+            {
+              type: "split" as const,
+              description: tx.description ?? "🤖 Agent split",
+              amount: tx.amount_usdc ?? 0,
+              vault: "Agente",
+              txHash: tx.stellar_tx_hash ?? "",
+              timestamp: "Ahora",
+              status: "confirmed" as const,
+            },
+            ...prev.slice(0, 4),
+          ]);
+          loadBalances();
+        },
+      )
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [user?.id, loadBalances]);
+
+  // ── Agent manual trigger ─────────────────────────────────
+  const handleAgentSplit = async () => {
+    const usdc = parseFloat(agentAmount);
+    if (!usdc || usdc <= 0 || !publicKey) return;
+    setAgentLoading(true);
+    setAgentError("");
+    setAgentResult(null);
+    try {
+      const result = await triggerManualSplit({
+        userPublicKey: publicKey,
+        incomeAmount: usdcToStroops(usdc),
+      });
+      setAgentResult(result);
+      toast({ title: "🤖 Split ejecutado vía agente", description: `Tx: ${result.txHash.slice(0, 8)}...` });
+      loadBalances();
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Error desconocido";
+      setAgentError(msg);
+    } finally {
+      setAgentLoading(false);
+    }
+  };
 
   // ── Execute split ────────────────────────────────────────
   const handleSplit = async () => {
@@ -242,6 +314,59 @@ const Dashboard = () => {
 
         {/* Agent status */}
         <AgentStatusCard />
+
+        {/* Agent manual trigger — only when agent server is online */}
+        {agentOnline && (
+          <div className="bg-card-dark border border-pink-subtle rounded-sm p-5 mb-8">
+            <h3 className="font-mono text-xs uppercase tracking-widest text-body-muted mb-4">
+              ⚡ Disparar split vía agente
+            </h3>
+            <div className="flex gap-3">
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                value={agentAmount}
+                onChange={(e) => setAgentAmount(e.target.value)}
+                placeholder="50.00 USDC"
+                className="flex-1 bg-card border border-border rounded-sm px-4 py-2.5 text-foreground text-sm font-mono focus:outline-none focus:ring-1 focus:ring-primary"
+              />
+              <button
+                onClick={handleAgentSplit}
+                disabled={agentLoading || !agentAmount}
+                className="btn-pink text-xs py-2.5 px-5 rounded-sm"
+                style={{ opacity: agentLoading || !agentAmount ? 0.5 : 1 }}
+              >
+                {agentLoading ? "Ejecutando..." : "→ Ejecutar"}
+              </button>
+            </div>
+
+            {agentError && (
+              <p className="font-mono text-xs text-dimmed mt-3">⚠ {agentError}</p>
+            )}
+
+            {agentResult && (
+              <div className="mt-4 p-3 bg-deep rounded-sm border border-mint/20">
+                <p className="font-mono text-xs text-mint mb-2">
+                  ✓ Split confirmado · {agentResult.txHash.slice(0, 8)}...{agentResult.txHash.slice(-6)}
+                </p>
+                <div className="flex gap-4 flex-wrap">
+                  {agentResult.vaultBreakdown.map((v) => (
+                    <span key={v.vaultId} className="font-mono text-xs text-foreground">
+                      vault_{v.vaultId}:{" "}
+                      <span className="text-mint">
+                        ${(Number(v.balance) / 10_000_000).toFixed(2)}
+                      </span>
+                      {v.vaultId === 2 && (
+                        <span className="text-[0.6rem] text-mint ml-1">→ Blend</span>
+                      )}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Vault mini-cards */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">

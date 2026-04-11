@@ -71,6 +71,68 @@ cp .env.example .env
 | `RPC_URL` | `https://soroban-testnet.stellar.org` | Soroban RPC |
 | `FACILITATOR_URL` | `https://www.x402.org/facilitator` | x402 payment facilitator |
 | `CONTRACT_ID` | `CCRH4EPUVIPESWYWOWPQ2QK3XN6KBR3RY6UFK36A4MXKKXIFH6ONRTVY` | SplitProtocol address |
+| `INTERNAL_API_KEY` | *(required for /split)* | Random secret shared with Supabase Edge Function |
+| `SUPABASE_URL` | *(optional)* | Supabase project URL — enables realtime feed writes |
+| `SUPABASE_SERVICE_ROLE_KEY` | *(optional)* | Service role key for writing to `transactions` table |
+
+---
+
+## Deploy to Railway
+
+Railway hosts the agent server as a public HTTPS endpoint so the frontend can reach it.
+
+### Step A — Create Railway project
+
+1. Go to [railway.app](https://railway.app) → **New Project → Deploy from GitHub repo**
+2. Select the `Propulsor` repo and set the **Root Directory** to `/agent`
+3. Railway will detect Node.js automatically via `railway.json`
+
+### Step B — Set environment variables in Railway
+
+In the Railway dashboard → **Variables**, add every variable from `.env` plus:
+
+```
+INTERNAL_API_KEY=<generate a random 32-char string>
+SUPABASE_URL=https://<your-project>.supabase.co
+SUPABASE_SERVICE_ROLE_KEY=<from Supabase → Settings → API>
+```
+
+Generate a random key: `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`
+
+### Step C — Run setup on Railway
+
+After first deploy, open **Railway → Service → Shell** and run:
+```bash
+npm run setup
+```
+This registers the 60/30/10 split rules on-chain under the server's address.
+
+### Step D — Connect frontend
+
+1. Copy the Railway service URL (e.g. `https://propulsor-agent.railway.app`)
+2. Add to your Supabase Edge Function secrets:
+   ```bash
+   supabase secrets set AGENT_SERVER_URL=https://propulsor-agent.railway.app
+   supabase secrets set INTERNAL_API_KEY=<same key as Railway>
+   supabase secrets set SUPABASE_SERVICE_ROLE_KEY=<key>
+   ```
+3. Deploy the Edge Function:
+   ```bash
+   supabase functions deploy agent-proxy
+   ```
+4. Add to your frontend `.env`:
+   ```env
+   VITE_AGENT_SERVER_URL=https://propulsor-agent.railway.app
+   ```
+
+### Step E — Deploy monitor as worker (optional)
+
+The monitor can run as a Railway worker service alongside the server:
+
+1. In Railway → **Add Service → Empty Service**
+2. Set Root Directory to `/agent`
+3. Set **Start Command** to `node dist/monitor.js`
+4. Add environment variables: `WATCHED_ACCOUNT`, `AGENT_SECRET`, plus all server vars
 
 ---
 

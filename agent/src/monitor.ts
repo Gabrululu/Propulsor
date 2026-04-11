@@ -23,6 +23,7 @@ import {
   encodePaymentSignatureHeader,
 } from '@x402/core/http';
 import { depositToBlend } from './blend.js';
+import { recordAgentSplit } from './supabase.js';
 
 // ---------------------------------------------------------------------------
 // Config
@@ -204,6 +205,14 @@ function startStream(): () => void {
             const usdcAmount = (Number(vault.balance) / 10_000_000).toFixed(7);
             log(`    Vault ${vault.vaultId}: ${vault.balance} stroops  (${usdcAmount} USDC)`);
           }
+          // ── Write to Supabase for realtime frontend feed ─────────────────
+          await recordAgentSplit({
+            watchedAccount: WATCHED_ACCOUNT,
+            incomeAmount,
+            txHash: result.txHash,
+            vaultBreakdown: result.vaultBreakdown,
+          });
+
           log('');
 
           // ── Blend deposit: vault_2 (savings) earns yield ─────────────────
