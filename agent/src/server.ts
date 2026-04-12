@@ -34,7 +34,17 @@ if (!process.env.SERVER_STELLAR_SECRET) {
   process.exit(1);
 }
 
-const serverKeypair = Keypair.fromSecret(process.env.SERVER_STELLAR_SECRET);
+let serverKeypair: Keypair;
+try {
+  serverKeypair = Keypair.fromSecret(process.env.SERVER_STELLAR_SECRET);
+} catch {
+  console.error(
+    'ERROR: SERVER_STELLAR_SECRET is set but is not a valid Stellar secret key.\n' +
+    '       A valid key starts with "S" and is 56 characters long.\n' +
+    '       Generate one at https://laboratory.stellar.org/#account-creator?network=test',
+  );
+  process.exit(1);
+}
 const serverAddress = serverKeypair.publicKey();
 const soroban = new SorobanRpc.Server(RPC_URL);
 
