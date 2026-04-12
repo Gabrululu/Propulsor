@@ -374,6 +374,7 @@ const Auth = () => {
             </div>
           )}
 
+          <button
             type="submit"
             disabled={loading}
             className="btn-pink w-full rounded-sm text-center"
