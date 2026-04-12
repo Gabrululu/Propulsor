@@ -96,10 +96,7 @@ serve(async (req) => {
 
     // Increment total_splits if split event
     if (body.event_type === "split_executed") {
-      await adminSupabase.rpc("increment_agent_splits_not_exists_yet_use_raw", {}).catch(() => {
-        // Fallback: read + write
-      });
-      // Simple approach: read current, increment, write
+      // Read current, increment, write
       const { data: current } = await adminSupabase
         .from("agent_status")
         .select("total_splits, total_yield_usdc")
