@@ -10,6 +10,7 @@ import {
   LOBSTR_ID,
   type WalletId,
 } from "@/lib/stellar/wallets-kit";
+import { SUPABASE_URL } from "@/lib/supabase/config";
 
 const stellarWallets: { id: WalletId; name: string; icon: string; recommended?: boolean }[] = [
   { id: FREIGHTER_ID, name: "Freighter", icon: "🚀", recommended: true },
@@ -27,30 +28,94 @@ const Auth = () => {
   const [walletLoading, setWalletLoading] = useState<string | null>(null);
   const [walletError, setWalletError] = useState("");
   const [socialLoading, setSocialLoading] = useState<string | null>(null);
+  const [authError, setAuthError] = useState("");
+  const [debugStatus, setDebugStatus] = useState("idle");
+  const [debugError, setDebugError] = useState("");
   const navigate = useNavigate();
+
+  const isDev = import.meta.env.DEV;
+  const emailConfirmationRequired = false;
+
+  const getFriendlyAuthError = (message?: string) => {
+    if (!message) return "No pudimos autenticarte. Intenta de nuevo.";
+    if (message.includes("Invalid login credentials") || message.includes("invalid user")) {
+      return "Correo o contraseña incorrectos.";
+    }
+    if (message.includes("Email not confirmed")) {
+      return "Tu cuenta todavía no está habilitada. Intenta nuevamente en unos segundos o contacta soporte.";
+    }
+    if (message.includes("User already registered")) {
+      return "Ese correo ya tiene una cuenta. Inicia sesión para continuar.";
+    }
+    return message;
+  };
+
+  const resolvePostLoginPath = async (userId: string) => {
+    const { data } = await supabase
+      .from("users_profile")
+      .select("onboarding_complete")
+      .eq("id", userId)
+      .maybeSingle();
+
+    return data?.onboarding_complete ? "/dashboard" : "/onboarding";
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email.trim() || !password.trim()) return;
 
     setLoading(true);
+    setAuthError("");
+    setDebugError("");
     try {
       if (isLogin) {
-        const { error } = await supabase.auth.signInWithPassword({ email, password });
+        setDebugStatus("login:loading");
+        const { data, error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
-        navigate("/onboarding");
+
+        const nextPath = data.user ? await resolvePostLoginPath(data.user.id) : "/dashboard";
+        setDebugStatus(`login:success -> ${nextPath}`);
+        navigate(nextPath);
       } else {
-        const { error } = await supabase.auth.signUp({
+        setDebugStatus("signup:loading");
+        const { data, error } = await supabase.auth.signUp({
           email,
           password,
-          options: { emailRedirectTo: window.location.origin },
+          options: {
+            emailRedirectTo: undefined,
+            data: {
+              auth_method: "email_password",
+            },
+          },
         });
         if (error) throw error;
+
+        if (data.user && !error) {
+          const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
+            email,
+            password,
+          });
+
+          if (signInError) throw signInError;
+
+          if (signInData.session) {
+            setDebugStatus("signup:success -> /onboarding");
+            toast.success("Cuenta creada. Vamos a configurar tu Propulsor.");
+            navigate("/onboarding");
+            return;
+          }
+        }
+
         setVerificationSent(true);
-        toast.success("Revisa tu correo para verificar tu cuenta");
+        setDebugStatus("signup:pending");
+        toast.success("Cuenta creada. Intenta iniciar sesión para continuar.");
       }
     } catch (err: any) {
-      toast.error(err.message || "Error de autenticación");
+      const friendlyMessage = getFriendlyAuthError(err?.message);
+      setAuthError(friendlyMessage);
+      setDebugStatus(isLogin ? "login:error" : "signup:error");
+      setDebugError(err?.message || "Error de autenticación");
+      toast.error(friendlyMessage);
     } finally {
       setLoading(false);
     }
@@ -58,6 +123,7 @@ const Auth = () => {
 
   const handleSocialLogin = async (provider: "google" | "github") => {
     setSocialLoading(provider);
+    setAuthError("");
     const { error } = await supabase.auth.signInWithOAuth({
       provider,
       options: { redirectTo: `${window.location.origin}/auth/callback` },
@@ -80,6 +146,7 @@ const Auth = () => {
     const walletName = stellarWallets.find(w => w.id === walletId)?.name ?? walletId;
     setWalletLoading(walletId);
     setWalletError("");
+    setAuthError("");
 
     try {
       // Check availability
@@ -207,6 +274,18 @@ const Auth = () => {
 
         {/* Email/password form */}
         <form onSubmit={handleSubmit} className="space-y-4">
+          {authError && (
+            <div
+              className="rounded-sm border px-4 py-3"
+              style={{
+                borderColor: "hsl(var(--primary) / 0.35)",
+                backgroundColor: "hsl(var(--primary) / 0.08)",
+              }}
+            >
+              <p className="text-sm text-primary font-medium">{authError}</p>
+            </div>
+          )}
+
           <div>
             <label className="block text-sm text-foreground font-semibold uppercase tracking-wider mb-2">
               Correo electrónico
@@ -348,6 +427,24 @@ const Auth = () => {
             {isLogin ? "Regístrate" : "Inicia sesión"}
           </button>
         </p>
+
+        {isDev && (
+          <div className="mt-6 rounded-sm border border-border bg-card p-4 space-y-2">
+            <p className="font-mono text-[0.65rem] uppercase tracking-widest text-primary">Auth debug</p>
+            <p className="text-xs text-muted-foreground font-mono break-all">
+              URL: {SUPABASE_URL.slice(0, 30)}...
+            </p>
+            <p className="text-xs text-muted-foreground font-mono">
+              Estado: <span className="text-foreground">{debugStatus}</span>
+            </p>
+            <p className="text-xs text-muted-foreground font-mono">
+              Confirmación por correo: <span className="text-foreground">{emailConfirmationRequired ? "Sí" : "No"}</span>
+            </p>
+            <p className="text-xs text-primary font-mono break-words min-h-4">
+              {debugError || "Sin errores"}
+            </p>
+          </div>
+        )}
       </div>
     </div>
   );
