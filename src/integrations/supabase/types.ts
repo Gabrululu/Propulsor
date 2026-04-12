@@ -146,7 +146,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      get_own_stellar_secret: { Args: never; Returns: string }
     }
     Enums: {
       profile_type: "jefa_hogar" | "emprendedora" | "trabajadora" | "freelancer"
