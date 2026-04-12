@@ -36,18 +36,43 @@ const Auth = () => {
   const isDev = import.meta.env.DEV;
   const emailConfirmationRequired = false;
 
+  const [forgotMode, setForgotMode] = useState(false);
+  const [forgotLoading, setForgotLoading] = useState(false);
+
+  const authErrors: Record<string, string> = {
+    "Invalid login credentials": "Correo o contraseña incorrectos",
+    "invalid user": "Correo o contraseña incorrectos",
+    "Email not confirmed": "Confirma tu correo antes de ingresar",
+    "User already registered": "Ya tienes una cuenta, inicia sesión",
+    "Password should be at least 6 characters": "La contraseña debe tener al menos 6 caracteres",
+    "Unable to validate email address": "Correo inválido",
+    "Signup requires a valid password": "La contraseña debe tener al menos 6 caracteres",
+  };
+
   const getFriendlyAuthError = (message?: string) => {
-    if (!message) return "No pudimos autenticarte. Intenta de nuevo.";
-    if (message.includes("Invalid login credentials") || message.includes("invalid user")) {
-      return "Correo o contraseña incorrectos.";
-    }
-    if (message.includes("Email not confirmed")) {
-      return "Tu cuenta todavía no está habilitada. Intenta nuevamente en unos segundos o contacta soporte.";
-    }
-    if (message.includes("User already registered")) {
-      return "Ese correo ya tiene una cuenta. Inicia sesión para continuar.";
+    if (!message) return "Ocurrió un error, intenta de nuevo";
+    for (const [key, value] of Object.entries(authErrors)) {
+      if (message.includes(key)) return value;
     }
     return message;
+  };
+
+  const handleForgotPassword = async () => {
+    if (!email.trim()) {
+      toast.error("Ingresa tu correo primero");
+      return;
+    }
+    setForgotLoading(true);
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: `${window.location.origin}/reset-password`,
+    });
+    setForgotLoading(false);
+    if (error) {
+      toast.error(getFriendlyAuthError(error.message));
+    } else {
+      toast.success("Te enviamos un correo para restablecer tu contraseña");
+      setForgotMode(false);
+    }
   };
 
   const resolvePostLoginPath = async (userId: string) => {
@@ -313,7 +338,41 @@ const Auth = () => {
               minLength={6}
               required
             />
+            {isLogin && (
+              <button
+                type="button"
+                onClick={() => setForgotMode(true)}
+                className="text-xs font-mono hover:text-foreground transition-colors mt-1"
+                style={{ color: "hsl(330, 8%, 56%)" }}
+              >
+                ¿Olvidaste tu contraseña?
+              </button>
+            )}
           </div>
+
+          {forgotMode && (
+            <div className="rounded-sm border border-border bg-card p-4 space-y-3">
+              <p className="text-sm text-muted-foreground">
+                Ingresa tu correo arriba y haz clic para recibir un link de recuperación.
+              </p>
+              <button
+                type="button"
+                onClick={handleForgotPassword}
+                disabled={forgotLoading}
+                className="btn-pink w-full rounded-sm text-center text-sm"
+                style={{ opacity: forgotLoading ? 0.6 : 1 }}
+              >
+                {forgotLoading ? "Enviando..." : "Enviar link de recuperación →"}
+              </button>
+              <button
+                type="button"
+                onClick={() => setForgotMode(false)}
+                className="text-xs font-mono text-muted-foreground hover:text-foreground transition-colors"
+              >
+                ← Cancelar
+              </button>
+            </div>
+          )}
 
           <button
             type="submit"
