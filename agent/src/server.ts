@@ -49,11 +49,23 @@ console.log('[propulsor-agent] Network:        ', NETWORK);
 const app = express();
 app.use(express.json());
 
-// CORS — allows the Supabase Edge Function and browser /health checks
-app.use((_req, res, next) => {
-  res.setHeader('Access-Control-Allow-Origin', '*');
+// CORS — allows Lovable frontend (*.lovable.app) and local dev
+const ALLOWED_ORIGINS = [
+  /^https:\/\/[^.]+\.lovable\.app$/,
+  'http://localhost:5173',
+  'http://localhost:3000',
+];
+
+app.use((req, res, next) => {
+  const origin = req.headers.origin ?? '';
+  const allowed =
+    ALLOWED_ORIGINS.some(o => (o instanceof RegExp ? o.test(origin) : o === origin));
+  if (allowed) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+    res.setHeader('Vary', 'Origin');
+  }
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-PAYMENT');
   next();
 });
 app.options('*', (_req, res) => res.sendStatus(204));
