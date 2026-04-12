@@ -36,18 +36,43 @@ const Auth = () => {
   const isDev = import.meta.env.DEV;
   const emailConfirmationRequired = false;
 
+  const [forgotMode, setForgotMode] = useState(false);
+  const [forgotLoading, setForgotLoading] = useState(false);
+
+  const authErrors: Record<string, string> = {
+    "Invalid login credentials": "Correo o contraseña incorrectos",
+    "invalid user": "Correo o contraseña incorrectos",
+    "Email not confirmed": "Confirma tu correo antes de ingresar",
+    "User already registered": "Ya tienes una cuenta, inicia sesión",
+    "Password should be at least 6 characters": "La contraseña debe tener al menos 6 caracteres",
+    "Unable to validate email address": "Correo inválido",
+    "Signup requires a valid password": "La contraseña debe tener al menos 6 caracteres",
+  };
+
   const getFriendlyAuthError = (message?: string) => {
-    if (!message) return "No pudimos autenticarte. Intenta de nuevo.";
-    if (message.includes("Invalid login credentials") || message.includes("invalid user")) {
-      return "Correo o contraseña incorrectos.";
-    }
-    if (message.includes("Email not confirmed")) {
-      return "Tu cuenta todavía no está habilitada. Intenta nuevamente en unos segundos o contacta soporte.";
-    }
-    if (message.includes("User already registered")) {
-      return "Ese correo ya tiene una cuenta. Inicia sesión para continuar.";
+    if (!message) return "Ocurrió un error, intenta de nuevo";
+    for (const [key, value] of Object.entries(authErrors)) {
+      if (message.includes(key)) return value;
     }
     return message;
+  };
+
+  const handleForgotPassword = async () => {
+    if (!email.trim()) {
+      toast.error("Ingresa tu correo primero");
+      return;
+    }
+    setForgotLoading(true);
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: `${window.location.origin}/reset-password`,
+    });
+    setForgotLoading(false);
+    if (error) {
+      toast.error(getFriendlyAuthError(error.message));
+    } else {
+      toast.success("Te enviamos un correo para restablecer tu contraseña");
+      setForgotMode(false);
+    }
   };
 
   const resolvePostLoginPath = async (userId: string) => {
