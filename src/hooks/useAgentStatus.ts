@@ -1,7 +1,10 @@
 import { useState, useEffect } from "react";
 
-const AGENT_SERVER_URL = import.meta.env.VITE_AGENT_SERVER_URL ?? "";
-const POLL_INTERVAL_MS = 15_000;
+const AGENT_SERVER_URL =
+  import.meta.env.VITE_AGENT_SERVER_URL ||
+  "https://propulsor-production.up.railway.app";
+
+const POLL_INTERVAL_MS = 30_000;
 
 export interface AgentStatus {
   /** true when the /health endpoint responds with 200 */
