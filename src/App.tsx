@@ -14,6 +14,7 @@ import Configuracion from "./pages/Configuracion";
 import Onboarding from "./pages/Onboarding";
 import Auth from "./pages/Auth";
 import AuthCallback from "./pages/AuthCallback";
+import ResetPassword from "./pages/ResetPassword";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
