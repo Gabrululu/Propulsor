@@ -13,6 +13,7 @@ export default defineConfig({
   plugins: [react()],
   resolve: {
     alias: {
+      "@/integrations/supabase/client": path.resolve(__dirname, "./src/lib/supabase/client.ts"),
       "@": path.resolve(__dirname, "./src"),
     },
   },

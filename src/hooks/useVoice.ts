@@ -1,4 +1,5 @@
 import { useState, useRef, useCallback } from "react";
+import { SUPABASE_PUBLISHABLE_KEY, SUPABASE_URL } from "@/lib/supabase/config";
 
 const audioCache = new Map<string, Blob>();
 
@@ -31,17 +32,12 @@ export function useVoice() {
         let blob = audioCache.get(text);
 
         if (!blob) {
-          const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-          const supabaseKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
-
-          if (!supabaseUrl || !supabaseKey) return;
-
-          const response = await fetch(`${supabaseUrl}/functions/v1/tts`, {
+          const response = await fetch(`${SUPABASE_URL}/functions/v1/tts`, {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
-              apikey: supabaseKey,
-              Authorization: `Bearer ${supabaseKey}`,
+              apikey: SUPABASE_PUBLISHABLE_KEY,
+              Authorization: `Bearer ${SUPABASE_PUBLISHABLE_KEY}`,
             },
             body: JSON.stringify({ text }),
           });
