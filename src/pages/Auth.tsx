@@ -51,7 +51,15 @@ const Auth = () => {
             .single();
 
           if (profile?.stellar_public_key) {
-            reconnect(profile.stellar_public_key, "custodial");
+            // Restore wallet only if localStorage doesn't already have it
+            // (same device where wallet was originally created)
+            const stored = localStorage.getItem("propulsor_wallet");
+            const parsedStored = stored ? JSON.parse(stored) : null;
+            if (!parsedStored?.publicKey || parsedStored.publicKey !== profile.stellar_public_key) {
+              // New device — infer mode from auth method
+              const isExternalWallet = signInData.user?.user_metadata?.auth_method === "stellar_wallet";
+              reconnect(profile.stellar_public_key, isExternalWallet ? "external" : "custodial_social");
+            }
           }
 
           navigate(profile?.onboarding_complete ? "/dashboard" : "/onboarding");
@@ -62,7 +70,7 @@ const Auth = () => {
         const { error } = await supabase.auth.signUp({
           email,
           password,
-          options: { emailRedirectTo: window.location.origin },
+          options: { emailRedirectTo: `${window.location.origin}/auth/callback` },
         });
         if (error) throw error;
         setVerificationSent(true);

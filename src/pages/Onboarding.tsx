@@ -42,7 +42,7 @@ const Onboarding = () => {
   const navigate = useNavigate();
   const { speak, stop, isSpeaking } = useVoice();
   const { user } = useAuth();
-  const { mode } = useWallet();
+  const { mode, publicKey: walletPublicKey } = useWallet();
   const contracts = useContracts();
   const welcomePlayed = useRef(false);
 
@@ -56,6 +56,14 @@ const Onboarding = () => {
       return () => clearTimeout(timer);
     }
   }, [step, speak]);
+
+  // Auto-advance past wallet connect step if wallet is already connected
+  useEffect(() => {
+    if (step === 2 && walletPublicKey && mode) {
+      setStellarPublicKey(walletPublicKey);
+      setStep(3);
+    }
+  }, [step, walletPublicKey, mode]);
 
   const handleProfileSelect = (key: string) => {
     setProfileType(key);
@@ -312,7 +320,7 @@ const Onboarding = () => {
             {deployError && !deployDone && (
               <div className="mt-4">
                 <p className="text-xs font-mono text-dimmed mb-2">
-                  Error al conectar con la red. Intenta de nuevo.
+                  {deployError}
                 </p>
                 <button
                   onClick={() => { setDeploying(false); setTerminalLines([]); }}
