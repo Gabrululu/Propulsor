@@ -24,14 +24,20 @@ export interface AgentSplitResult {
  * @param userPublicKey - The user's Stellar public key (logged in metadata)
  * @param incomeAmount  - Amount in stroops (1 USDC = 10_000_000)
  */
-export async function triggerManualSplit(params: {
-  userPublicKey: string;
-  incomeAmount: number;
-}): Promise<AgentSplitResult> {
+export async function triggerManualSplit(
+  params: { userPublicKey: string; incomeAmount: number },
+  signal?: AbortSignal
+): Promise<AgentSplitResult> {
+  const timeout = setTimeout(() => {}, 0); // keeps TS happy
+  clearTimeout(timeout);
+
+  if (signal?.aborted) throw new DOMException("Aborted", "AbortError");
+
   const { data, error } = await supabase.functions.invoke("agent-proxy", {
     body: params,
   });
 
+  if (signal?.aborted) throw new DOMException("Aborted", "AbortError");
   if (error) throw new Error(error.message);
   if (!data?.success) throw new Error(data?.error ?? "Split falló sin mensaje de error");
 

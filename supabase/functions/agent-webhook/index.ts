@@ -45,9 +45,18 @@ serve(async (req) => {
       watched_account?: string;
     };
 
+    const VALID_EVENT_TYPES = ["split_executed", "agent_error", "agent_started", "blend_deposited"];
+
     if (!body.user_id || !body.event_type) {
       return new Response(
         JSON.stringify({ error: "user_id and event_type are required" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+
+    if (!VALID_EVENT_TYPES.includes(body.event_type)) {
+      return new Response(
+        JSON.stringify({ error: `Unknown event_type: ${body.event_type}` }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }
@@ -83,6 +92,10 @@ serve(async (req) => {
 
     if (body.event_type === "split_executed") {
       statusUpdate.last_split_at = new Date().toISOString();
+    }
+
+    if (body.event_type === "agent_error") {
+      statusUpdate.is_active = false;
     }
 
     // Upsert: insert or update on conflict

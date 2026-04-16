@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
+import { errorMessage } from "@/lib/utils";
 import DashboardLayout from "@/components/DashboardLayout";
 import SplitBar from "@/components/SplitBar";
 import TxRow from "@/components/TxRow";
@@ -197,18 +198,23 @@ const Dashboard = () => {
     setAgentLoading(true);
     setAgentError("");
     setAgentResult(null);
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 30_000);
+
     try {
-      const result = await triggerManualSplit({
-        userPublicKey: publicKey,
-        incomeAmount: Number(usdcToStroops(usdc)),
-      });
+      const result = await triggerManualSplit(
+        { userPublicKey: publicKey, incomeAmount: Number(usdcToStroops(usdc)) },
+        controller.signal
+      );
       setAgentResult(result);
       toast({ title: "🤖 Split ejecutado vía agente", description: `Tx: ${result.txHash.slice(0, 8)}...` });
       loadBalances();
     } catch (err) {
-      const msg = err instanceof Error ? err.message : "Error desconocido";
-      setAgentError(msg);
+      const isTimeout = err instanceof DOMException && err.name === "AbortError";
+      setAgentError(isTimeout ? "Tiempo de espera agotado (30s). Intenta de nuevo." : (err instanceof Error ? err.message : "Error desconocido"));
     } finally {
+      clearTimeout(timeout);
       setAgentLoading(false);
     }
   };
@@ -257,7 +263,7 @@ const Dashboard = () => {
       setSplitAmount("");
       setSplitPin("");
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : "Error desconocido";
+      const msg = errorMessage(err);
       setSplitError(msg);
     } finally {
       setSplitting(false);

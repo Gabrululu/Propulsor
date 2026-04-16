@@ -135,6 +135,16 @@ export function WalletProvider({ children }: { children: ReactNode }) {
 
   // ── Reconnect (restore state from known public key) ────
   const reconnect = useCallback((pk: string, m: WalletMode) => {
+    // Clear stale data if a different user's wallet is stored
+    try {
+      const stored = localStorage.getItem(STORAGE_KEY);
+      if (stored) {
+        const parsed: PersistedWallet = JSON.parse(stored);
+        if (parsed.publicKey && parsed.publicKey !== pk) {
+          localStorage.removeItem(STORAGE_KEY);
+        }
+      }
+    } catch { /* ignore */ }
     setMode(m);
     setPublicKey(pk);
     setWalletId(null);

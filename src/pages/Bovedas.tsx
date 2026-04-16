@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
+import { errorMessage } from "@/lib/utils";
 import DashboardLayout from "@/components/DashboardLayout";
 import VaultCard from "@/components/VaultCard";
 import { useWallet } from "@/lib/stellar/WalletContext";
@@ -133,7 +134,7 @@ const Bovedas = () => {
       setReleasePin("");
       await loadVaults();
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : "Error desconocido";
+      const msg = errorMessage(err);
       setReleaseError(msg);
     } finally {
       setReleasing(false);
@@ -168,7 +169,7 @@ const Bovedas = () => {
       setLockGoal("");
       await loadVaults();
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : "Error desconocido";
+      const msg = errorMessage(err);
       setLockError(msg);
     } finally {
       setLocking(false);
@@ -196,7 +197,7 @@ const Bovedas = () => {
       setAddPin("");
       await loadVaults();
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : "Error desconocido";
+      const msg = errorMessage(err);
       setAddError(msg);
     } finally {
       setAdding(false);

@@ -96,7 +96,12 @@ serve(async (req) => {
       );
 
       const vaultDesc = result.vaultBreakdown
-        .map((v) => `vault_${v.vaultId}: $${(Number(v.balance) / 10_000_000).toFixed(2)}`)
+        .map((v) => {
+          const stroops = BigInt(v.balance);
+          const whole = stroops / 10_000_000n;
+          const cents = (stroops % 10_000_000n * 100n / 10_000_000n).toString().padStart(2, "0");
+          return `vault_${v.vaultId}: $${whole}.${cents}`;
+        })
         .join(" · ");
 
       await adminSupabase.from("transactions").insert({

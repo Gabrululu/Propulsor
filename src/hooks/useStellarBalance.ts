@@ -9,18 +9,23 @@ export function useStellarBalance(publicKey: string | null) {
   useEffect(() => {
     if (!publicKey) return;
 
+    let active = true; // prevents stale updates after unmount or publicKey change
+
     const fetchBalance = async () => {
+      if (!active) return;
       setLoading(true);
       const b = await getAccountBalance(publicKey);
-      setBalance(b);
-      setLoading(false);
+      if (active) {
+        setBalance(b);
+        setLoading(false);
+      }
     };
 
     fetchBalance();
-    // Poll every 30s
     intervalRef.current = setInterval(fetchBalance, 30000);
 
     return () => {
+      active = false;
       if (intervalRef.current) clearInterval(intervalRef.current);
     };
   }, [publicKey]);

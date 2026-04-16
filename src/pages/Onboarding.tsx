@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { errorMessage } from "@/lib/utils";
 import { useNavigate } from "react-router-dom";
 import PercentageSlider from "@/components/PercentageSlider";
 import TerminalBlock from "@/components/TerminalBlock";
@@ -104,7 +105,7 @@ const Onboarding = () => {
         const profileData: Record<string, unknown> = {
           id: user.id,
           name: name.trim(),
-          profile_type: profileType as never,
+          profile_type: (["jefa_hogar", "emprendedora", "trabajadora", "freelancer"].includes(profileType) ? profileType : null) as never,
           onboarding_complete: true,
         };
         if (stellarPublicKey) profileData.stellar_public_key = stellarPublicKey;
@@ -142,7 +143,7 @@ const Onboarding = () => {
       setTimeout(() => speak(msg), 600);
       setTimeout(() => navigate("/dashboard"), 4500);
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : "Error desconocido";
+      const message = errorMessage(err);
       setDeployError(message);
       addLine(`✗ Error: ${message}`, "dimmed");
       setDeploying(false);

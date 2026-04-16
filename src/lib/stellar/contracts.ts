@@ -234,11 +234,18 @@ export async function executeSplit(
     onProgress
   );
 
-  const raw = S.scValToNative(returnValue) as Array<{ balance: bigint; vault_id: number }>;
-  const balances: VaultBalance[] = raw.map((v) => ({
-    vault_id: v.vault_id,
-    balance: BigInt(v.balance),
-  }));
+  let balances: VaultBalance[] = [];
+  try {
+    const raw = S.scValToNative(returnValue);
+    if (Array.isArray(raw)) {
+      balances = raw.map((v) => ({
+        vault_id: Number(v.vault_id),
+        balance: BigInt(v.balance),
+      }));
+    }
+  } catch {
+    // Contract returned unexpected value — balances will be refreshed on next poll
+  }
 
   return { txHash, balances };
 }
