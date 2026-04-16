@@ -24,6 +24,7 @@ interface WalletState {
   connectCustodial: (userId: string, pin: string) => Promise<string>;
   connectSocial: (userId: string) => Promise<string>;
   connectExternal: (walletId: WalletId) => Promise<void>;
+  reconnect: (pk: string, mode: WalletMode) => void;
   disconnect: () => void;
   signTransaction: (txXdr: string, pin?: string) => Promise<string>;
 }
@@ -132,6 +133,14 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     [persist]
   );
 
+  // ── Reconnect (restore state from known public key) ────
+  const reconnect = useCallback((pk: string, m: WalletMode) => {
+    setMode(m);
+    setPublicKey(pk);
+    setWalletId(null);
+    persist(m, pk, null);
+  }, [persist]);
+
   // ── Disconnect ──────────────────────────────────────────
   const disconnect = useCallback(() => {
     setMode(null);
@@ -178,6 +187,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         connectCustodial,
         connectSocial,
         connectExternal,
+        reconnect,
         disconnect,
         signTransaction,
       }}

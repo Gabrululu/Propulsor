@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { useWallet } from "@/lib/stellar/WalletContext";
 import {
   kit,
   FREIGHTER_ID,
@@ -28,6 +29,7 @@ const Auth = () => {
   const [walletError, setWalletError] = useState("");
   const [socialLoading, setSocialLoading] = useState<string | null>(null);
   const navigate = useNavigate();
+  const { reconnect } = useWallet();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -36,9 +38,26 @@ const Auth = () => {
     setLoading(true);
     try {
       if (isLogin) {
-        const { error } = await supabase.auth.signInWithPassword({ email, password });
+        const { data: signInData, error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
-        navigate("/onboarding");
+
+        // Check profile to restore wallet state and navigate correctly
+        const userId = signInData.user?.id;
+        if (userId) {
+          const { data: profile } = await supabase
+            .from("users_profile")
+            .select("onboarding_complete, stellar_public_key")
+            .eq("id", userId)
+            .single();
+
+          if (profile?.stellar_public_key) {
+            reconnect(profile.stellar_public_key, "custodial");
+          }
+
+          navigate(profile?.onboarding_complete ? "/dashboard" : "/onboarding");
+        } else {
+          navigate("/onboarding");
+        }
       } else {
         const { error } = await supabase.auth.signUp({
           email,
