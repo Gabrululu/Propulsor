@@ -56,17 +56,21 @@ serve(async (req) => {
     }
 
     // ── Forward to agent server ────────────────────────────────────────────
-    const AGENT_SERVER_URL = Deno.env.get("AGENT_SERVER_URL") ?? "";
+    let rawUrl = (Deno.env.get("AGENT_SERVER_URL") ?? "").trim();
     const INTERNAL_API_KEY = Deno.env.get("INTERNAL_API_KEY") ?? "";
 
-    if (!AGENT_SERVER_URL || !INTERNAL_API_KEY) {
+    if (!rawUrl || !INTERNAL_API_KEY) {
       return new Response(
         JSON.stringify({ success: false, error: "Agent server not configured" }),
         { status: 503, headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }
 
-    const agentRes = await fetch(`${AGENT_SERVER_URL}/split`, {
+    // Normalise: add scheme if missing, strip trailing path/slash
+    if (!/^https?:\/\//i.test(rawUrl)) rawUrl = `https://${rawUrl}`;
+    rawUrl = rawUrl.replace(/\/+$/, "").replace(/\/split$/i, "");
+
+    const agentRes = await fetch(`${rawUrl}/split`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
