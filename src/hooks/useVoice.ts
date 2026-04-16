@@ -2,6 +2,29 @@ import { useState, useRef, useCallback } from "react";
 
 const audioCache = new Map<string, Blob>();
 
+// Browser speech synthesis fallback (no API key required)
+function speakWithBrowser(text: string, onEnd: () => void): void {
+  if (!window.speechSynthesis) { onEnd(); return; }
+
+  window.speechSynthesis.cancel();
+
+  const utter = new SpeechSynthesisUtterance(text);
+  utter.lang = "es-ES";
+  utter.rate = 0.95;
+  utter.pitch = 1;
+
+  // Prefer a Spanish female voice if available
+  const voices = window.speechSynthesis.getVoices();
+  const spanishFemale = voices.find(
+    (v) => v.lang.startsWith("es") && v.name.toLowerCase().includes("female")
+  ) ?? voices.find((v) => v.lang.startsWith("es"));
+  if (spanishFemale) utter.voice = spanishFemale;
+
+  utter.onend = onEnd;
+  utter.onerror = onEnd;
+  window.speechSynthesis.speak(utter);
+}
+
 export function useVoice() {
   const [isSpeaking, setIsSpeaking] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -17,6 +40,7 @@ export function useVoice() {
       URL.revokeObjectURL(urlRef.current);
       urlRef.current = null;
     }
+    window.speechSynthesis?.cancel();
     setIsSpeaking(false);
   }, []);
 
@@ -24,8 +48,11 @@ export function useVoice() {
     async (text: string) => {
       if (!text.trim()) return;
 
-      // Stop any current playback
       stop();
+
+      if (document.hidden) return;
+
+      setIsSpeaking(true);
 
       try {
         let blob = audioCache.get(text);
@@ -34,55 +61,53 @@ export function useVoice() {
           const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
           const supabaseKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
 
-          if (!supabaseUrl || !supabaseKey) return;
+          if (supabaseUrl && supabaseKey) {
+            const response = await fetch(`${supabaseUrl}/functions/v1/tts`, {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                apikey: supabaseKey,
+                Authorization: `Bearer ${supabaseKey}`,
+              },
+              body: JSON.stringify({ text }),
+            });
 
-          const response = await fetch(`${supabaseUrl}/functions/v1/tts`, {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              apikey: supabaseKey,
-              Authorization: `Bearer ${supabaseKey}`,
-            },
-            body: JSON.stringify({ text }),
-          });
-
-          if (!response.ok) return; // Fail silently
-
-          blob = await response.blob();
-          if (blob.size === 0) return;
-
-          audioCache.set(text, blob);
+            if (response.ok) {
+              const candidate = await response.blob();
+              if (candidate.size > 0) blob = candidate;
+              audioCache.set(text, blob!);
+            }
+          }
         }
 
-        const url = URL.createObjectURL(blob);
-        urlRef.current = url;
+        if (blob) {
+          // ElevenLabs audio
+          const url = URL.createObjectURL(blob);
+          urlRef.current = url;
+          const audio = new Audio(url);
+          audioRef.current = audio;
 
-        const audio = new Audio(url);
-        audioRef.current = audio;
+          audio.onended = () => {
+            setIsSpeaking(false);
+            URL.revokeObjectURL(url);
+            urlRef.current = null;
+            audioRef.current = null;
+          };
+          audio.onerror = () => {
+            setIsSpeaking(false);
+            URL.revokeObjectURL(url);
+            urlRef.current = null;
+            audioRef.current = null;
+          };
 
-        setIsSpeaking(true);
-
-        audio.onended = () => {
-          setIsSpeaking(false);
-          URL.revokeObjectURL(url);
-          urlRef.current = null;
-          audioRef.current = null;
-        };
-
-        audio.onerror = () => {
-          setIsSpeaking(false);
-          URL.revokeObjectURL(url);
-          urlRef.current = null;
-          audioRef.current = null;
-        };
-
-        // Check if page is visible and respect silent mode
-        if (document.hidden) return;
-
-        await audio.play();
+          await audio.play();
+        } else {
+          // Fallback: browser speech synthesis
+          speakWithBrowser(text, () => setIsSpeaking(false));
+        }
       } catch {
-        // Fail silently
-        setIsSpeaking(false);
+        // Last resort: browser synthesis
+        speakWithBrowser(text, () => setIsSpeaking(false));
       }
     },
     [stop]
