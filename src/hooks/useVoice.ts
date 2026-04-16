@@ -25,6 +25,16 @@ function speakWithBrowser(text: string, onEnd: () => void): void {
   window.speechSynthesis.speak(utter);
 }
 
+function isVoiceEnabled(): boolean {
+  try {
+    const stored = localStorage.getItem("propulsor_voice_enabled");
+    // Default true if never set
+    return stored === null ? true : stored === "true";
+  } catch {
+    return true;
+  }
+}
+
 export function useVoice() {
   const [isSpeaking, setIsSpeaking] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -47,6 +57,7 @@ export function useVoice() {
   const speak = useCallback(
     async (text: string) => {
       if (!text.trim()) return;
+      if (!isVoiceEnabled()) return;
 
       stop();
 

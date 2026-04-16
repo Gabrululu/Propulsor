@@ -29,11 +29,13 @@ const Configuracion = () => {
       .single()
       .then(({ data }) => {
         if (data) {
+          const voiceEnabled = data.voice_enabled ?? true;
           setProfile({
             name: data.name ?? "",
             profile_type: data.profile_type,
-            voice_enabled: data.voice_enabled ?? true,
+            voice_enabled: voiceEnabled,
           });
+          localStorage.setItem("propulsor_voice_enabled", String(voiceEnabled));
         }
       });
   }, [user?.id]);
@@ -46,10 +48,13 @@ const Configuracion = () => {
         .from("users_profile")
         .update({
           name: profile.name,
+          profile_type: profile.profile_type as never,
           voice_enabled: profile.voice_enabled,
         })
         .eq("id", user.id);
       if (error) throw error;
+      // Sync voice preference to localStorage so useVoice picks it up instantly
+      localStorage.setItem("propulsor_voice_enabled", String(profile.voice_enabled));
       toast({ title: "✓ Guardado", description: "Tus preferencias se actualizaron" });
     } catch {
       toast({ title: "Error", description: "No se pudo guardar", variant: "destructive" });
@@ -98,9 +103,16 @@ const Configuracion = () => {
               <label className="block text-xs font-mono text-muted-foreground uppercase tracking-widest mb-1">
                 Tipo de perfil
               </label>
-              <p className="text-sm text-foreground">
-                {profile.profile_type ? profileLabels[profile.profile_type] : "No definido"}
-              </p>
+              <select
+                value={profile.profile_type ?? ""}
+                onChange={(e) => setProfile({ ...profile, profile_type: e.target.value || null })}
+                className="w-full bg-card border border-border rounded-sm px-4 py-3 text-foreground text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+              >
+                <option value="">No definido</option>
+                {Object.entries(profileLabels).map(([key, label]) => (
+                  <option key={key} value={key}>{label}</option>
+                ))}
+              </select>
             </div>
 
             <div>

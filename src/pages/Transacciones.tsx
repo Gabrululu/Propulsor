@@ -106,6 +106,16 @@ const Transacciones = () => {
 
   const loading = stellarLoading || agentLoading;
 
+  // Merge and sort all items newest-first for "todas" tab
+  type MergedItem =
+    | { kind: "stellar"; data: StellarTransaction; ts: number }
+    | { kind: "agent"; data: AgentActivityEvent; ts: number };
+
+  const mergedItems: MergedItem[] = [
+    ...stellarTxs.map((tx) => ({ kind: "stellar" as const, data: tx, ts: new Date(tx.timestamp).getTime() })),
+    ...agentEvents.map((ev) => ({ kind: "agent" as const, data: ev, ts: new Date(ev.created_at).getTime() })),
+  ].sort((a, b) => b.ts - a.ts);
+
   const TABS: { key: FilterTab; label: string }[] = [
     { key: "todas", label: "Todas" },
     { key: "manuales", label: "Manuales" },
@@ -144,16 +154,18 @@ const Transacciones = () => {
             </div>
           ) : (
             <>
-              {/* Agent events */}
-              {(filter === "todas" || filter === "agente") &&
-                agentEvents.map((event) => <AgentTxRow key={event.id} event={event} />)}
+              {filter === "todas" && mergedItems.map((item) =>
+                item.kind === "stellar"
+                  ? <StellarTxRow key={`s-${item.data.id}`} tx={item.data} />
+                  : <AgentTxRow key={`a-${item.data.id}`} event={item.data} />
+              )}
 
-              {/* On-chain transactions */}
-              {(filter === "todas" || filter === "manuales") &&
-                stellarTxs.map((tx) => <StellarTxRow key={tx.id} tx={tx} />)}
+              {filter === "manuales" && stellarTxs.map((tx) => <StellarTxRow key={tx.id} tx={tx} />)}
+
+              {filter === "agente" && agentEvents.map((ev) => <AgentTxRow key={ev.id} event={ev} />)}
 
               {/* Empty state */}
-              {((filter === "todas" && stellarTxs.length === 0 && agentEvents.length === 0) ||
+              {((filter === "todas" && mergedItems.length === 0) ||
                 (filter === "manuales" && stellarTxs.length === 0) ||
                 (filter === "agente" && agentEvents.length === 0)) && (
                 <div className="p-8 text-center">
