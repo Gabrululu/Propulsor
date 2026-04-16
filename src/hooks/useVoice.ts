@@ -1,5 +1,6 @@
 import { useState, useRef, useCallback } from "react";
-import { SUPABASE_PUBLISHABLE_KEY, SUPABASE_URL } from "@/lib/supabase/config";
+import { supabase } from "@/integrations/supabase/client";
+import { SUPABASE_URL } from "@/lib/supabase/config";
 
 const audioCache = new Map<string, Blob>();
 
@@ -32,12 +33,15 @@ export function useVoice() {
         let blob = audioCache.get(text);
 
         if (!blob) {
+          // Get the current user session for a real JWT
+          const { data: { session } } = await supabase.auth.getSession();
+          if (!session?.access_token) return; // Not authenticated, fail silently
+
           const response = await fetch(`${SUPABASE_URL}/functions/v1/tts`, {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
-              apikey: SUPABASE_PUBLISHABLE_KEY,
-              Authorization: `Bearer ${SUPABASE_PUBLISHABLE_KEY}`,
+              Authorization: `Bearer ${session.access_token}`,
             },
             body: JSON.stringify({ text }),
           });
