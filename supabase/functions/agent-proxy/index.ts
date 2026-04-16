@@ -56,7 +56,7 @@ serve(async (req) => {
     }
 
     // ── Forward to agent server ────────────────────────────────────────────
-    const AGENT_SERVER_URL = Deno.env.get("AGENT_SERVER_URL") ?? "";
+    let AGENT_SERVER_URL = Deno.env.get("AGENT_SERVER_URL") ?? "";
     const INTERNAL_API_KEY = Deno.env.get("INTERNAL_API_KEY") ?? "";
 
     if (!AGENT_SERVER_URL || !INTERNAL_API_KEY) {
@@ -65,6 +65,12 @@ serve(async (req) => {
         { status: 503, headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }
+
+    // Normalize URL: ensure protocol and strip accidental /split suffix
+    if (!AGENT_SERVER_URL.startsWith("http")) {
+      AGENT_SERVER_URL = `https://${AGENT_SERVER_URL}`;
+    }
+    AGENT_SERVER_URL = AGENT_SERVER_URL.replace(/\/split\/?$/, "").replace(/\/$/, "");
 
     const agentRes = await fetch(`${AGENT_SERVER_URL}/split`, {
       method: "POST",
