@@ -29,7 +29,7 @@ const Auth = () => {
   const [walletError, setWalletError] = useState("");
   const [socialLoading, setSocialLoading] = useState<string | null>(null);
   const navigate = useNavigate();
-  const { reconnect } = useWallet();
+  const { reconnect, connectSocial } = useWallet();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -67,14 +67,21 @@ const Auth = () => {
           navigate("/onboarding");
         }
       } else {
-        const { error } = await supabase.auth.signUp({
+        const { data: signUpData, error } = await supabase.auth.signUp({
           email,
           password,
           options: { emailRedirectTo: `${window.location.origin}/auth/callback` },
         });
         if (error) throw error;
-        setVerificationSent(true);
-        toast.success("Revisa tu correo para verificar tu cuenta");
+
+        // If email confirmation is disabled, signUp returns a session immediately
+        if (signUpData.session) {
+          await connectSocial(signUpData.user!.id);
+          navigate("/onboarding");
+        } else {
+          setVerificationSent(true);
+          toast.success("Revisa tu correo para verificar tu cuenta");
+        }
       }
     } catch (err: any) {
       toast.error(err.message || "Error de autenticación");
