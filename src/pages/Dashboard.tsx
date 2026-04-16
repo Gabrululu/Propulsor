@@ -258,8 +258,7 @@ const Dashboard = () => {
       setSplitPin("");
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Error desconocido";
-      setSplitError("Error al conectar con la red. Intenta de nuevo.");
-      console.error(msg);
+      setSplitError(msg);
     } finally {
       setSplitting(false);
     }

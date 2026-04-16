@@ -133,8 +133,8 @@ const Bovedas = () => {
       setReleasePin("");
       await loadVaults();
     } catch (err: unknown) {
-      setReleaseError("Error al conectar con la red. Intenta de nuevo.");
-      console.error(err);
+      const msg = err instanceof Error ? err.message : "Error desconocido";
+      setReleaseError(msg);
     } finally {
       setReleasing(false);
     }
@@ -168,8 +168,8 @@ const Bovedas = () => {
       setLockGoal("");
       await loadVaults();
     } catch (err: unknown) {
-      setLockError("Error al conectar con la red. Intenta de nuevo.");
-      console.error(err);
+      const msg = err instanceof Error ? err.message : "Error desconocido";
+      setLockError(msg);
     } finally {
       setLocking(false);
     }
@@ -196,8 +196,8 @@ const Bovedas = () => {
       setAddPin("");
       await loadVaults();
     } catch (err: unknown) {
-      setAddError("Error al conectar con la red. Intenta de nuevo.");
-      console.error(err);
+      const msg = err instanceof Error ? err.message : "Error desconocido";
+      setAddError(msg);
     } finally {
       setAdding(false);
     }
