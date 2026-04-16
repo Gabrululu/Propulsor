@@ -11,8 +11,4 @@ export const SUPABASE_URL = envSupabaseUrl || fallbackSupabaseUrl;
 export const SUPABASE_PUBLISHABLE_KEY =
   envSupabasePublishableKey || envSupabaseAnonKey || fallbackSupabasePublishableKey;
 
-if (!envSupabaseUrl || !(envSupabasePublishableKey || envSupabaseAnonKey)) {
-  console.warn(
-    "[Supabase] Faltan variables VITE_SUPABASE_URL o VITE_SUPABASE_PUBLISHABLE_KEY/VITE_SUPABASE_ANON_KEY en build; usando la configuración pública de respaldo del proyecto."
-  );
-}
+// Fallback values match the project's public anon key — no warning needed.
