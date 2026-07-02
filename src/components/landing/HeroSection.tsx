@@ -1,6 +1,9 @@
 import { motion } from "framer-motion";
+import { useLanguage } from "@/lib/i18n/LanguageContext";
 
 const HeroSection = () => {
+  const { t } = useLanguage();
+
   return (
     <section className="relative min-h-screen flex flex-col justify-center overflow-hidden">
       {/* Grid overlay */}
@@ -57,7 +60,7 @@ const HeroSection = () => {
           transition={{ duration: 0.6 }}
           className="font-mono text-xs text-body-muted tracking-widest mb-8"
         >
-          Independencia financiera · Stellar Network · x402 · LATAM
+          {t.hero.eyebrow}
         </motion.p>
 
         {/* Main headline */}
@@ -67,9 +70,9 @@ const HeroSection = () => {
           transition={{ duration: 0.8, delay: 0.2 }}
         >
           <h1 className="text-5xl md:text-7xl lg:text-8xl font-bold leading-[0.9] mb-12">
-            <span className="block text-foreground">TU PRIMERA</span>
-            <span className="block text-outline">HERRAMIENTA DE</span>
-            <span className="block text-pink">INDEPENDENCIA.</span>
+            <span className="block text-foreground">{t.hero.titleLine1}</span>
+            <span className="block text-outline">{t.hero.titleLine2}</span>
+            <span className="block text-pink">{t.hero.titleLine3}</span>
           </h1>
         </motion.div>
 
@@ -83,34 +86,33 @@ const HeroSection = () => {
           {/* Description */}
           <div className="md:col-span-3">
             <p className="text-body-muted text-sm leading-relaxed">
-              Separa, protege y ahorra tu dinero automáticamente con bóvedas inteligentes en Stellar. Sin banco. Sin
-              permiso. Solo tú.
+              {t.hero.description}
             </p>
           </div>
 
           {/* Stats */}
           <div className="md:col-span-6 grid grid-cols-3 gap-6">
             <div>
-              <span className="font-mono text-2xl md:text-3xl font-bold text-pink">7 de 10</span>
-              <p className="text-body-muted text-xs mt-1">trabajadores informales en Perú sin cuenta bancaria propia</p>
+              <span className="font-mono text-2xl md:text-3xl font-bold text-pink">{t.hero.stat1Value}</span>
+              <p className="text-body-muted text-xs mt-1">{t.hero.stat1Label}</p>
             </div>
             <div>
               <span className="font-mono text-2xl md:text-3xl font-bold text-mint">$0.00001</span>
-              <p className="text-body-muted text-xs mt-1">Fee por transacción en Stellar</p>
+              <p className="text-body-muted text-xs mt-1">{t.hero.stat2Label}</p>
             </div>
             <div>
-              <span className="font-mono text-2xl md:text-3xl font-bold text-pink">5s</span>
-              <p className="text-body-muted text-xs mt-1">Para separar y proteger tu dinero</p>
+              <span className="font-mono text-2xl md:text-3xl font-bold text-pink">{t.hero.stat3Value}</span>
+              <p className="text-body-muted text-xs mt-1">{t.hero.stat3Label}</p>
             </div>
           </div>
 
           {/* CTAs */}
           <div className="md:col-span-3 flex flex-col gap-3">
             <a href="#waitlist" className="btn-pink rounded-sm text-center">
-              → Quiero acceso anticipado
+              {t.hero.ctaPrimary}
             </a>
             <a href="#problem" className="btn-outline-pink rounded-sm text-center">
-              Ver el problema
+              {t.hero.ctaSecondary}
             </a>
           </div>
         </motion.div>

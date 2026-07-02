@@ -1,35 +1,8 @@
 import { motion } from "framer-motion";
+import { useLanguage } from "@/lib/i18n/LanguageContext";
 
-const steps = [
-  {
-    index: "01",
-    title: "Recibe tu dinero",
-    tag: "ANCHOR",
-    tagColor: "pink" as const,
-    description: "Deposita soles. Un anchor SEP-24 convierte tu dinero a USDC en Stellar automáticamente.",
-  },
-  {
-    index: "02",
-    title: "Separa automáticamente",
-    tag: "SOROBAN",
-    tagColor: "mint" as const,
-    description: "Un smart contract ejecuta tu regla de separación: cada sol se divide entre tus bóvedas.",
-  },
-  {
-    index: "03",
-    title: "Protege y ahorra",
-    tag: "VAULTS",
-    tagColor: "pink" as const,
-    description: "Tus bóvedas guardan, bloquean o acumulan tu dinero según tus reglas. Sin intermediarios.",
-  },
-  {
-    index: "04",
-    title: "El agente lo protege",
-    tag: "x402 · AGENTE",
-    tagColor: "mint" as const,
-    description: "Un agente autónomo vigila tu cuenta 24/7. Detecta cada remesa entrante y ejecuta el split al instante — sin que toques nada.",
-  },
-];
+const stepIndexes = ["01", "02", "03", "04"];
+const stepColors = ["pink", "mint", "pink", "mint"] as const;
 
 const tagBg = {
   pink: "rgba(255,179,198,0.1)",
@@ -41,13 +14,20 @@ const tagText = {
 };
 
 const HowItWorksSection = () => {
+  const { t } = useLanguage();
+  const steps = t.howItWorks.steps.map((step, i) => ({
+    ...step,
+    index: stepIndexes[i],
+    tagColor: stepColors[i],
+  }));
+
   return (
     <section className="py-24 px-6 max-w-7xl mx-auto">
       <div className="mb-12">
-        <span className="font-mono text-xs text-dimmed tracking-widest">// SECCIÓN 01</span>
+        <span className="font-mono text-xs text-dimmed tracking-widest">{t.howItWorks.sectionLabel}</span>
         <h2 className="text-3xl md:text-5xl font-bold mt-2">
-          <span className="text-foreground">CÓMO </span>
-          <span className="text-pink">FUNCIONA</span>
+          <span className="text-foreground">{t.howItWorks.titlePart1}</span>
+          <span className="text-pink">{t.howItWorks.titlePart2}</span>
         </h2>
       </div>
 

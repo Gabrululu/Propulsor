@@ -1,25 +1,7 @@
 import { motion } from "framer-motion";
+import { useLanguage } from "@/lib/i18n/LanguageContext";
 
-const problemCards = [
-  {
-    value: "70%",
-    label: "de trabajadores informales en Perú no tienen control real sobre sus finanzas",
-    source: "BID, 2024",
-    color: "pink" as const,
-  },
-  {
-    value: "$800M+",
-    label: "en remesas enviadas a Perú cada año sin herramientas de ahorro",
-    source: "Banco Mundial, 2024",
-    color: "mint" as const,
-  },
-  {
-    value: "23%",
-    label: "de hogares en la economía informal tienen algún tipo de ahorro formal",
-    source: "INEI, 2024",
-    color: "pink-soft" as const,
-  },
-];
+const cardColors = ["pink", "mint", "pink-soft"] as const;
 
 const borderColors = {
   pink: "rgba(255,179,198,0.3)",
@@ -34,13 +16,16 @@ const textColors = {
 };
 
 const ProblemSection = () => {
+  const { t } = useLanguage();
+  const problemCards = t.problem.cards.map((card, i) => ({ ...card, color: cardColors[i] }));
+
   return (
     <section id="problem" className="py-24 px-6 max-w-7xl mx-auto">
       <div className="mb-12">
-        <span className="font-mono text-xs text-dimmed tracking-widest">// SECCIÓN 00</span>
+        <span className="font-mono text-xs text-dimmed tracking-widest">{t.problem.sectionLabel}</span>
         <h2 className="text-3xl md:text-5xl font-bold mt-2">
-          <span className="text-foreground">EL </span>
-          <span className="text-pink">PROBLEMA</span>
+          <span className="text-foreground">{t.problem.titlePart1}</span>
+          <span className="text-pink">{t.problem.titlePart2}</span>
         </h2>
       </div>
 

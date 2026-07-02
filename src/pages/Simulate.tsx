@@ -9,14 +9,21 @@ import SoundWaveBars from "@/components/voice/SoundWaveBars";
 import { useVoice } from "@/hooks/useVoice";
 import { buildSimulatorSummary } from "@/lib/voiceMessages";
 import { useStellarFees } from "@/hooks/useStellarFees";
+import { useLanguage } from "@/lib/i18n/LanguageContext";
 
 const RATE = 3.71; // PEN to USD
 const BANK_MONTHLY_FEE = 15; // S/15.00/mes average bank fee
 
+// The voice summary is narrated in Spanish regardless of UI language (it's an
+// accessibility feature for low-literacy Peruvian users) — keep its vault
+// names fixed so the spoken sentence stays coherent.
+const SPANISH_VAULT_NAMES = ["Hogar", "Fondo seguro", "Meta grande"];
+
 const Simulate = () => {
+  const { t } = useLanguage();
   const [amountPEN, setAmountPEN] = useState("1000");
   const [percentages, setPercentages] = useState([60, 30, 10]);
-  const [vaultNames] = useState(["Hogar", "Fondo seguro", "Meta grande"]);
+  const vaultNames = t.simulate.vaultNames;
   const [locks, setLocks] = useState([false, false, true]);
   const { speak, stop, isSpeaking } = useVoice();
   const hasListened = useRef(false);
@@ -35,21 +42,21 @@ const Simulate = () => {
     if (!hasListened.current) return;
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => {
-      const msg = buildSimulatorSummary(pen, vaultNames, percentages);
+      const msg = buildSimulatorSummary(pen, SPANISH_VAULT_NAMES, percentages);
       speak(msg);
     }, 1200);
     return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
-  }, [pen, percentages, vaultNames, speak]);
+  }, [pen, percentages, speak]);
 
   const handleListenClick = useCallback(() => {
     if (isSpeaking) { stop(); return; }
     hasListened.current = true;
-    const msg = buildSimulatorSummary(pen, vaultNames, percentages);
+    const msg = buildSimulatorSummary(pen, SPANISH_VAULT_NAMES, percentages);
     speak(msg);
-  }, [isSpeaking, stop, pen, vaultNames, percentages, speak]);
+  }, [isSpeaking, stop, pen, percentages, speak]);
 
   const feeDisplay = fees.loading
-    ? "$0.00001 USD (cargando...)"
+    ? `$0.00001 USD (${t.simulate.feeLoading})`
     : `$${fees.feeUSD.toFixed(6)} USD (${fees.baseFeeStroops} stroops)`;
 
   const terminalLines = [
@@ -62,7 +69,7 @@ const Simulate = () => {
       color: (i === 1 ? "mint" : "pink") as "mint" | "pink",
     })),
     { text: "", color: "default" as const },
-    { text: `→ Fee estimado: ${feeDisplay}`, color: "mint" as const },
+    { text: `${t.simulate.feeEstimateLine} ${feeDisplay}`, color: "mint" as const },
     { text: `→ Tx: GBSIMULADOR...XF9A ✓`, color: "mint" as const },
   ];
 
@@ -71,13 +78,13 @@ const Simulate = () => {
       <Navbar />
       <main className="pt-14">
         <section className="py-24 px-6 max-w-5xl mx-auto">
-          <span className="font-mono text-xs text-dimmed tracking-widest">SIMULADOR</span>
+          <span className="font-mono text-xs text-dimmed tracking-widest">{t.simulate.eyebrow}</span>
           <h1 className="text-3xl md:text-5xl font-bold mt-2 mb-2">
-            <span className="text-foreground">SIMULA TU </span>
-            <span className="text-pink">SEPARACIÓN</span>
+            <span className="text-foreground">{t.simulate.titlePart1}</span>
+            <span className="text-pink">{t.simulate.titlePart2}</span>
           </h1>
           <p className="text-body-muted text-sm mb-12 max-w-lg">
-            Ingresa un monto en soles y mira cómo se distribuiría automáticamente en tus bóvedas.
+            {t.simulate.subtitle}
           </p>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
@@ -85,7 +92,7 @@ const Simulate = () => {
             <div className="space-y-8">
               <div>
                 <label className="block text-sm text-foreground font-semibold uppercase tracking-wider mb-2">
-                  Monto en Soles (PEN)
+                  {t.simulate.amountLabel}
                 </label>
                 <div className="relative">
                   <span className="absolute left-4 top-1/2 -translate-y-1/2 text-pink font-mono text-lg">S/</span>
@@ -105,7 +112,7 @@ const Simulate = () => {
 
               <div>
                 <label className="block text-sm text-foreground font-semibold uppercase tracking-wider mb-4">
-                  Distribución
+                  {t.simulate.distributionLabel}
                 </label>
                 <PercentageSlider
                   values={percentages}
@@ -133,7 +140,7 @@ const Simulate = () => {
                             : "text-dimmed border-pink-subtle"
                         }`}
                       >
-                        {locks[i] ? "🔒 Lock" : "Libre"}
+                        {locks[i] ? `🔒 ${t.simulate.lock}` : t.simulate.free}
                       </button>
                     </div>
                   </div>
@@ -142,7 +149,7 @@ const Simulate = () => {
 
               {percentages.reduce((a, b) => a + b, 0) !== 100 && (
                 <p className="text-pink text-xs font-mono">
-                  ⚠ Los porcentajes deben sumar 100%
+                  {t.simulate.percentagesWarning}
                 </p>
               )}
             </div>
@@ -183,22 +190,22 @@ const Simulate = () => {
               {/* Fee comparison */}
               <div className="bg-card-dark border border-pink-subtle rounded-sm p-4 space-y-2">
                 <div className="flex justify-between items-center">
-                  <span className="text-xs text-body-muted font-mono">Fee Stellar</span>
+                  <span className="text-xs text-body-muted font-mono">{t.simulate.feeStellar}</span>
                   <span className="text-xs text-mint font-mono font-bold">
                     {fees.loading ? "..." : `$${fees.feeUSD.toFixed(6)} USD`}
                   </span>
                 </div>
                 <div className="flex justify-between items-center">
-                  <span className="text-xs text-body-muted font-mono">Comisión bancaria promedio</span>
-                  <span className="text-xs text-pink-soft font-mono">S/15.00/mes</span>
+                  <span className="text-xs text-body-muted font-mono">{t.simulate.avgBankFee}</span>
+                  <span className="text-xs text-pink-soft font-mono">S/15.00{t.simulate.perMonth}</span>
                 </div>
                 <div className="border-t border-pink-subtle pt-2 flex justify-between items-center">
-                  <span className="text-xs text-foreground font-mono font-semibold">Ahorro anual estimado</span>
+                  <span className="text-xs text-foreground font-mono font-semibold">{t.simulate.estimatedAnnualSavings}</span>
                   <span className="text-sm text-pink font-mono font-bold">S/{annualSavings.toFixed(2)}</span>
                 </div>
               </div>
 
-              <TerminalBlock lines={terminalLines} title="soroban :: simulate.rs" />
+              <TerminalBlock lines={terminalLines} title={t.simulate.terminalTitle} />
 
               {/* Voice summary button */}
               <button
@@ -210,12 +217,12 @@ const Simulate = () => {
               >
                 <SoundWaveBars isActive={isSpeaking} />
                 <span className="font-mono text-[0.7rem] uppercase tracking-wider text-pink">
-                  {isSpeaking ? "⏹ DETENER" : "🔊 ESCUCHAR RESUMEN"}
+                  {isSpeaking ? t.simulate.stop : t.simulate.listenSummary}
                 </span>
               </button>
 
               <Link to="/dashboard" className="btn-pink rounded-sm block text-center mt-2">
-                Crear mi cuenta y activar esto →
+                {t.simulate.createAccount}
               </Link>
             </div>
           </div>

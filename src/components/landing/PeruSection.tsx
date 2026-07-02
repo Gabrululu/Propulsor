@@ -1,22 +1,20 @@
 import { motion } from "framer-motion";
 import FlowNode from "../FlowNode";
+import { useLanguage } from "@/lib/i18n/LanguageContext";
 
-const flowSteps = [
-  { label: "Recibes S/", color: "pink" as const },
-  { label: "Anchor SEP-24\nconvierte", color: "mint" as const },
-  { label: "Soroban\nejecuta", color: "pink" as const },
-  { label: "Retiras\nUSDC", color: "mint" as const },
-  { label: "3 bóvedas\nactivas", color: "pink" as const },
-];
+const flowColors = ["pink", "mint", "pink", "mint", "pink"] as const;
 
 const PeruSection = () => {
+  const { t } = useLanguage();
+  const flowSteps = t.peru.flowSteps.map((label, i) => ({ label, color: flowColors[i] }));
+
   return (
     <section className="py-24 px-6 max-w-7xl mx-auto">
       <div className="mb-12">
-        <span className="font-mono text-xs text-dimmed tracking-widest">// SECCIÓN 04</span>
+        <span className="font-mono text-xs text-dimmed tracking-widest">{t.peru.sectionLabel}</span>
         <h2 className="text-3xl md:text-5xl font-bold mt-2">
-          <span className="text-foreground">HECHO PARA </span>
-          <span className="text-pink">PERÚ</span>
+          <span className="text-foreground">{t.peru.titlePart1}</span>
+          <span className="text-pink">{t.peru.titlePart2}</span>
         </h2>
       </div>
 
@@ -27,13 +25,12 @@ const PeruSection = () => {
           whileInView={{ opacity: 1, x: 0 }}
           viewport={{ once: true }}
         >
-          <span className="font-mono text-6xl md:text-8xl font-bold text-pink">S/1000</span>
+          <span className="font-mono text-6xl md:text-8xl font-bold text-pink">{t.peru.amount}</span>
           <p className="text-body-muted text-sm mt-4 leading-relaxed max-w-md">
-            Depositas mil soles. En 5 segundos, un anchor convierte a USDC y Soroban los separa en
-            tus 3 bóvedas. Sin banco. Sin espera. Sin permiso.
+            {t.peru.description}
           </p>
           <a href="#waitlist" className="btn-pink rounded-sm inline-block mt-6">
-            → Quiero acceso anticipado
+            {t.peru.cta}
           </a>
         </motion.div>
 

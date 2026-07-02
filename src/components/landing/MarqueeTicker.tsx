@@ -1,18 +1,10 @@
+import { useLanguage } from "@/lib/i18n/LanguageContext";
+
+const colors = ["pink", "mint", "pink", "mint", "pink", "mint", "pink", "mint", "pink", "mint", "pink", "mint"];
+
 const MarqueeTicker = () => {
-  const items = [
-    { text: "Independencia financiera", color: "pink" },
-    { text: "Economía informal LATAM", color: "mint" },
-    { text: "Remesas protegidas", color: "pink" },
-    { text: "Soroban Smart Contracts", color: "mint" },
-    { text: "Time-Lock Vaults", color: "pink" },
-    { text: "SEP-24 Anchors", color: "mint" },
-    { text: "USDC", color: "pink" },
-    { text: "Soles → Dólares", color: "mint" },
-    { text: "Agente Autónomo", color: "pink" },
-    { text: "x402 Payments", color: "mint" },
-    { text: "Blend Protocol", color: "pink" },
-    { text: "She Ships 2026 💜", color: "mint" },
-  ];
+  const { t } = useLanguage();
+  const items = t.marquee.map((text, i) => ({ text, color: colors[i] }));
 
   const row = items.map((item, i) => (
     <span key={i} className="flex items-center gap-4 whitespace-nowrap">

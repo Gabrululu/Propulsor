@@ -1,17 +1,14 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
+import { useLanguage } from "@/lib/i18n/LanguageContext";
 
-const checklistItems = [
-  { text: "Bóvedas inteligentes con Time-Lock", color: "pink" },
-  { text: "Conversión automática soles → USDC", color: "mint" },
-  { text: "Sin banco, sin permiso, sin intermediarios", color: "pink" },
-  { text: "Smart contracts en Soroban", color: "mint" },
-  { text: "Diseñada para la economía informal", color: "pink" },
-];
+const checklistColors = ["pink", "mint", "pink", "mint", "pink"];
 
 const WaitlistSection = () => {
+  const { t } = useLanguage();
   const [email, setEmail] = useState("");
   const [submitted, setSubmitted] = useState(false);
+  const checklistItems = t.waitlist.checklist.map((text, i) => ({ text, color: checklistColors[i] }));
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -23,10 +20,10 @@ const WaitlistSection = () => {
   return (
     <section id="waitlist" className="py-24 px-6 max-w-7xl mx-auto">
       <div className="mb-12">
-        <span className="font-mono text-xs text-dimmed tracking-widest">ACCESO ANTICIPADO</span>
+        <span className="font-mono text-xs text-dimmed tracking-widest">{t.waitlist.eyebrow}</span>
         <h2 className="text-3xl md:text-5xl font-bold mt-2">
-          <span className="text-foreground">ÚNETE A </span>
-          <span className="text-pink">PROPULSOR</span>
+          <span className="text-foreground">{t.waitlist.titlePart1}</span>
+          <span className="text-pink">{t.waitlist.titlePart2}</span>
         </h2>
       </div>
 
@@ -40,29 +37,29 @@ const WaitlistSection = () => {
           {!submitted ? (
             <form onSubmit={handleSubmit} className="bg-card-dark p-6 rounded-sm border border-pink-subtle">
               <label className="block text-sm text-foreground mb-2 font-semibold uppercase tracking-wider">
-                Tu email
+                {t.waitlist.emailLabel}
               </label>
               <input
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="tu@correo.com"
+                placeholder={t.waitlist.emailPlaceholder}
                 required
                 className="w-full bg-deep border border-pink-subtle rounded-sm px-4 py-3 text-foreground text-sm font-mono placeholder:text-dimmed focus:outline-none focus:border-pink-visible"
               />
               <button type="submit" className="btn-pink rounded-sm w-full mt-4">
-                → Quiero acceso anticipado
+                {t.waitlist.submit}
               </button>
               <p className="text-dimmed text-xs mt-3">
-                Sin spam. Solo te avisamos cuando esté listo.
+                {t.waitlist.helper}
               </p>
             </form>
           ) : (
             <div className="bg-card-dark p-6 rounded-sm border border-pink-subtle text-center">
               <span className="text-4xl mb-4 block">✓</span>
-              <h3 className="text-xl font-bold text-mint mb-2">¡ESTÁS EN LA LISTA!</h3>
+              <h3 className="text-xl font-bold text-mint mb-2">{t.waitlist.successTitle}</h3>
               <p className="text-body-muted text-sm">
-                Te avisaremos cuando Propulsor esté listo. Gracias por creer en la independencia financiera.
+                {t.waitlist.successBody}
               </p>
             </div>
           )}

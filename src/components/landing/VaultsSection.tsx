@@ -1,10 +1,11 @@
 import { motion } from "framer-motion";
 import TerminalBlock from "../TerminalBlock";
+import { useLanguage } from "@/lib/i18n/LanguageContext";
 
-const vaults = [
-  { icon: "🏠", name: "Hogar", pct: 60, color: "pink" as const, desc: "Gastos del día a día, comida, servicios" },
-  { icon: "🔒", name: "Fondo seguro", pct: 30, color: "mint" as const, desc: "Emergencias, salud, imprevistos" },
-  { icon: "🚀", name: "Meta grande", pct: 10, color: "pink-soft" as const, desc: "Tu sueño: negocio, casa, educación — rinde en Blend Protocol automáticamente." },
+const vaultMeta = [
+  { pct: 60, color: "pink" as const },
+  { pct: 30, color: "mint" as const },
+  { pct: 10, color: "pink-soft" as const },
 ];
 
 const colorBorder = {
@@ -23,32 +24,20 @@ const colorBg = {
   "pink-soft": "#e8a0b4",
 };
 
-const terminalLines = [
-  { text: "// propulsor::split_engine", color: "dimmed" as const },
-  { text: 'fn execute_split(amount: u128) {', color: "pink" as const },
-  { text: "  let hogar = amount * 60 / 100;", color: "default" as const },
-  { text: "  let seguro = amount * 30 / 100;", color: "default" as const },
-  { text: "  let meta = amount * 10 / 100;", color: "default" as const },
-  { text: '  vault::deposit("hogar", hogar);', color: "pink" as const },
-  { text: '  vault::deposit("seguro", seguro);', color: "pink" as const },
-  { text: '  vault::deposit("meta", meta);', color: "pink" as const },
-  { text: "}", color: "default" as const },
-  { text: "", color: "default" as const },
-  { text: "→ Split ejecutado: 3 bóvedas activas", color: "mint" as const },
-  { text: "→ Tx: GBPROPULSOR...XF9A ✓", color: "mint" as const },
-  { text: "", color: "default" as const },
-  { text: "// agente: depositando meta en Blend...", color: "dimmed" as const },
-  { text: "→ vault_2: 1.0000000 USDC → Blend yield ✓", color: "mint" as const },
-];
+const lineColors = ["dimmed", "pink", "default", "default", "default", "pink", "pink", "pink", "default", "default", "mint", "mint", "default", "dimmed", "mint"] as const;
 
 const VaultsSection = () => {
+  const { t } = useLanguage();
+  const vaults = t.vaults.items.map((v, i) => ({ ...v, ...vaultMeta[i] }));
+  const terminalLines = t.vaults.terminalLines.map((text, i) => ({ text, color: lineColors[i] }));
+
   return (
     <section className="py-24 px-6 max-w-7xl mx-auto">
       <div className="mb-12">
-        <span className="font-mono text-xs text-dimmed tracking-widest">// SECCIÓN 02</span>
+        <span className="font-mono text-xs text-dimmed tracking-widest">{t.vaults.sectionLabel}</span>
         <h2 className="text-3xl md:text-5xl font-bold mt-2">
-          <span className="text-foreground">TUS </span>
-          <span className="text-pink">BÓVEDAS</span>
+          <span className="text-foreground">{t.vaults.titlePart1}</span>
+          <span className="text-pink">{t.vaults.titlePart2}</span>
         </h2>
       </div>
 
@@ -90,7 +79,7 @@ const VaultsSection = () => {
           whileInView={{ opacity: 1, x: 0 }}
           viewport={{ once: true }}
         >
-          <TerminalBlock lines={terminalLines} title="soroban :: split_contract.rs" />
+          <TerminalBlock lines={terminalLines} title={t.vaults.terminalTitle} />
         </motion.div>
       </div>
     </section>
