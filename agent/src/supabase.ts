@@ -1,66 +1,71 @@
 /**
- * supabase.ts — Supabase client for the Propulsor agent (Node.js)
+ * supabase.ts — Notifies the `agent-webhook` Supabase Edge Function.
  *
- * Uses the service role key so the agent can write to the transactions
- * table without RLS interference. Optional — only active if both
- * SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are set in the environment.
+ * The Railway agent process has no service_role key (Lovable Cloud does not
+ * expose it outside its own Edge Functions), so it never talks to the
+ * database directly. It only calls `agent-webhook` over HTTPS with a shared
+ * secret; the Edge Function resolves the user and does the actual writes
+ * (agent_activity, agent_status, transactions) using its auto-injected
+ * SUPABASE_SERVICE_ROLE_KEY.
  */
-
-import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
 const SUPABASE_URL = process.env.SUPABASE_URL ?? '';
-const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY ?? '';
+const AGENT_WEBHOOK_SECRET = process.env.AGENT_WEBHOOK_SECRET ?? '';
 
-/**
- * Supabase admin client.
- * `null` when env vars are not configured — callers must check before use.
- */
-export const agentSupabase: SupabaseClient | null =
-  SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY
-    ? createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
-        auth: { persistSession: false },
-      })
-    : null;
+export type AgentWebhookEventType =
+  | 'agent_started'
+  | 'split_executed'
+  | 'blend_deposited'
+  | 'agent_error';
 
-/**
- * Writes a completed auto-split to the Supabase transactions table.
- * Looks up the user by their Stellar public key (stellar_public_key column).
- * Silently skips if Supabase is not configured or the user is not found.
- */
-export async function recordAgentSplit(params: {
+export interface AgentWebhookEvent {
+  /** Stellar public key the monitor watches — resolved to a users_profile.id server-side */
   watchedAccount: string;
-  incomeAmount: number;   // stroops
-  txHash: string;
-  vaultBreakdown: Array<{ vaultId: number; balance: string }>;
-}): Promise<void> {
-  if (!agentSupabase) return;
+  eventType: AgentWebhookEventType;
+  amountUsdc?: number;
+  txHash?: string;
+  /** Per-vault USDC amounts, keyed as "vault_0" / "vault_1" / "vault_2" */
+  vaultBreakdown?: Record<string, number>;
+  blendTxHash?: string;
+  blendSuccess?: boolean;
+  errorMessage?: string;
+}
+
+/**
+ * Notifies the `agent-webhook` Supabase Edge Function so the dashboard's
+ * Agent status card (agent_status / agent_activity tables) and transaction
+ * history reflect live activity. Best-effort — never throws; silently skips
+ * if SUPABASE_URL or AGENT_WEBHOOK_SECRET are not configured.
+ */
+export async function notifyAgentWebhook(event: AgentWebhookEvent): Promise<void> {
+  if (!SUPABASE_URL || !AGENT_WEBHOOK_SECRET) return;
 
   try {
-    // Resolve stellar public key → user_id
-    const { data: profile } = await agentSupabase
-      .from('users_profile')
-      .select('id')
-      .eq('stellar_public_key', params.watchedAccount)
-      .single();
-
-    if (!profile) return; // user not found — skip
-
-    const vaultDesc = params.vaultBreakdown
-      .map(v => `vault_${v.vaultId}: $${(Number(v.balance) / 10_000_000).toFixed(2)}`)
-      .join(' · ');
-
-    await agentSupabase.from('transactions').insert({
-      user_id: profile.id,
-      type: 'split',
-      amount_usdc: params.incomeAmount / 10_000_000,
-      stellar_tx_hash: params.txHash,
-      status: 'confirmed',
-      description: `🤖 Auto-split · ${vaultDesc}`,
+    const res = await fetch(`${SUPABASE_URL}/functions/v1/agent-webhook`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${AGENT_WEBHOOK_SECRET}`,
+      },
+      body: JSON.stringify({
+        watched_account: event.watchedAccount,
+        event_type: event.eventType,
+        amount_usdc: event.amountUsdc,
+        tx_hash: event.txHash,
+        vault_breakdown: event.vaultBreakdown,
+        blend_tx_hash: event.blendTxHash,
+        blend_success: event.blendSuccess,
+        error_message: event.errorMessage,
+      }),
     });
+
+    if (!res.ok) {
+      console.error('[agent-webhook] Notify failed:', res.status, await res.text());
+    }
   } catch (err) {
     // Non-critical — log and continue
     console.error(
-      '[supabase] Error recording split:',
+      '[agent-webhook] Notify error:',
       err instanceof Error ? err.message : String(err),
     );
   }

@@ -7,9 +7,9 @@
 
 ## What is Propulsor?
 
-Propulsor is a programmable financial management platform for women in the informal economy across Latin America. Using Smart Contracts on the **Stellar (Soroban)** network, every income is automatically split into three protected vaults based on user-defined rules — no bank account required, no abusive fees, with real protection against external pressures.
+Propulsor is a programmable financial management platform for the informal economy across Latin America. Using Smart Contracts on the **Stellar (Soroban)** network, every income is automatically split into three protected vaults based on user-defined rules — no bank account required, no abusive fees, with real protection against external pressures.
 
-**The problem:** 70% of women in the informal economy in Latin America lack access to formal financial products (IDB, 2024). Peru receives $800M+ in annual remittances — most reaches women heads of household and disappears within days. Not due to irresponsibility: due to lack of tools.
+**The problem:** 70% of informal economy workers in Latin America lack access to formal financial products (IDB, 2024). Peru receives $800M+ in annual remittances — most reaches households with no formal savings tools and disappears within days. Not due to irresponsibility: due to lack of tools.
 
 **The solution:** A smart contract that separates money before pressure arrives.
 
@@ -142,11 +142,106 @@ npm run monitor
 
 ## 🏆 Hackathon Context
 
-Propulsor was originally built for **She Ships 2026**, a 48-hour global hackathon celebrating International Women's Day (March 6–8, 2026), focused on financial tools for women in the informal economy in Latin America.
+Propulsor was originally built for **She Ships 2026**, a 48-hour global hackathon celebrating International Women's Day (March 6–8, 2026), focused on financial tools for women in the informal economy in Latin America. Since then, the product scope has broadened to serve informal-economy workers across the region more generally, not one demographic exclusively.
 
 It was subsequently extended for the **Stellar Agentic Payments Hackathon** with the addition of the x402-powered autonomous agent. The agentic layer directly addresses the core problem: remittances arrive at unpredictable hours and the window to protect the money before external pressures redirect it can be minutes, not days. The agent closes that window to zero — the split happens the moment the payment lands on-chain, without requiring the user to be present or take any action.
 
 The architecture is testnet-grade for the demo and mainnet-ready in design.
+
+---
+
+## 🔐 ZK Privacy Layer *(Stellar Hacks — Real-World ZK)*
+
+Propulsor now includes a zero-knowledge proof system that allows users to prove financial claims **without revealing their actual balances**. Built with Groth16 / BLS12-381 (verified on-chain via Soroban Protocol 22).
+
+### Feature 1 — Proof-of-Vault
+
+Prove that savings vault (vault_2) holds ≥ a threshold amount without revealing the exact balance. The proof is generated entirely in the browser (client-side WASM) and verified on-chain by the `ProofOfVaultVerifier` Soroban contract.
+
+**Why this matters for LATAM financial inclusion:** Workers in informal economies often face social or family pressure to share or redistribute their savings. A ZK proof lets them demonstrate creditworthiness or savings consistency to institutions, employers, or family members — without revealing their exact balance and without surrendering privacy.
+
+**Tech stack:**
+- Circuit: Circom 2.x + `GreaterEqThan(64)` comparator (BLS12-381 curve)
+- Proof system: Groth16 (snarkjs)
+- Verifier: `ProofOfVaultVerifier` Soroban contract — pairing check `e(-A,B)·e(α,β)·e(vk_x,γ)·e(C,δ)=1`
+- Frontend: snarkjs WASM runs in the browser — balance never leaves the device
+- Shareable proof: `/verify/{proof_hash}` — anyone can verify, no auth required
+
+**Flow:**
+1. User sets a threshold (e.g. "$50 USDC")
+2. Browser reads vault_2 balance from Soroban (stays local)
+3. snarkjs generates a Groth16 proof off-chain (~3-5s in WASM)
+4. Proof is submitted to `ProofOfVaultVerifier` on Stellar Testnet
+5. Contract runs the pairing check and emits `ProofVerified(user, threshold, ledger)`
+6. User gets a shareable link: `/verify/{proof_hash}`
+
+### Feature 2 — Proof-of-Consistent-Saving
+
+Proves that a user has completed splits in ≥ 6 distinct months out of the last 12, without revealing individual amounts. Uses RISC Zero zkVM (attestation pattern while CAP-0074/BN254 awaits Protocol 26).
+
+- Guest: `zk/risc0/consistent_saving/src/main.rs` — counts qualifying months from Supabase history
+- Host: `zk/risc0/consistent_saving/host/src/main.rs` — generates STARK receipt
+- Status: Off-chain proof + attester signature (direct on-chain verification pending CAP-0074)
+
+### Deployed Contracts (Testnet)
+
+| Contract | Network | Contract ID |
+|---|---|---|
+| ProofOfVaultVerifier | Stellar Testnet | `CAGUCQUMNSOJALPFM3A2T2TBDIDCFUDY3UQA6JIWAN4ZP3COPQ7HP7BU` |
+
+The contract is live, initialized with the circuit's verification key, and ready to accept proofs. Explore it at [Stellar Lab](https://lab.stellar.org/r/testnet/contract/CAGUCQUMNSOJALPFM3A2T2TBDIDCFUDY3UQA6JIWAN4ZP3COPQ7HP7BU).
+
+> **⚠️ Trusted Setup Notice:** The Groth16 proving key (`circuit.zkey`) was generated using a single-contributor Powers of Tau ceremony (development only). This means the toxic waste was not distributed among multiple independent parties. A production deployment would require a multi-party trusted setup ceremony or migration to a transparent proof system (e.g. STARK / PLONK). This implementation is suitable for hackathon/testnet use but **not for production with real funds**.
+
+### Proof-of-Vault Architecture
+
+```
+Browser (ZKProofPanel.tsx)
+  │  reads vault_2 balance from Soroban (private — stays on device)
+  │  snarkjs WASM generates Groth16/BLS12-381 proof (~3-5s)
+  │  negates A point client-side (pre-neg for pairing)
+  │  encodes G2 points as IETF/blst: c1 ∥ c0 (192 bytes each)
+  ▼
+ProofOfVaultVerifier (Soroban — Protocol 22)
+  │  pairing_check([-A,B], [α,β], [vk_x,γ], [C,δ]) → bool
+  │  nullifier = sha256(a∥b∥c) → replay protection
+  │  stores ProofRecord { user, threshold_usdc, ledger } (180-day TTL)
+  │  emits ProofVerified(user, threshold, nullifier)
+  ▼
+/verify/{proof_hash}  (VerifyProof.tsx — public, no auth)
+  └─ reads ProofRecord from contract + ledger close time from Horizon
+```
+
+### Generate a Proof Locally (CLI)
+
+Useful for scripting or testing outside the browser UI:
+
+```bash
+# 1. Compile circuit + trusted setup (requires circom ≥ 2.1 with --prime bls12381)
+cd zk/circuits/proof_of_vault
+make all        # compiles circuit, runs powers-of-tau, creates circuit.zkey
+
+# 2. Copy artifacts to the public folder (served to browser by Vite)
+cp build/circuit_js/circuit.wasm ../../../public/zk/circuit.wasm
+cp circuit.zkey ../../../public/zk/circuit.zkey
+
+# 3. Encode VK for the Soroban contract
+cd ../../
+pnpm install
+npx tsx scripts/encode_vk.ts     # outputs zk/scripts/vk_encoded.json
+
+# 4. Build + deploy the verifier contract with __constructor (Protocol 22)
+cd contracts/proof_of_vault_verifier
+stellar contract build
+cd ../../
+STELLAR_SECRET=S... npx tsx scripts/deploy_contract.ts
+# → copy the contract ID to VITE_ZK_VERIFIER_CONTRACT_ID in .env
+# (deploys and initializes with the VK atomically — no separate init step needed)
+
+# 6. Generate + verify a proof via CLI (the UI does this automatically)
+npx tsx scripts/generate_proof.ts --balance 1000000000 --threshold 500000000
+STELLAR_SECRET=S... VERIFIER_CONTRACT_ID=C... npx tsx scripts/verify_onchain.ts
+```
 
 ---
 
@@ -222,9 +317,10 @@ VITE_STELLAR_NETWORK=TESTNET
 VITE_HORIZON_URL=https://horizon-testnet.stellar.org
 VITE_SOROBAN_RPC_URL=https://soroban-testnet.stellar.org
 
-# Soroban Contract IDs 
+# Soroban Contract IDs
 VITE_SPLIT_CONTRACT_ID=
 VITE_VAULT_CONTRACT_ID=
+VITE_ZK_VERIFIER_CONTRACT_ID=CAGUCQUMNSOJALPFM3A2T2TBDIDCFUDY3UQA6JIWAN4ZP3COPQ7HP7BU
 
 # ElevenLabs 
 ELEVENLABS_API_KEY=your_elevenlabs_api_key
@@ -243,6 +339,7 @@ ELEVENLABS_VOICE_ID=your_voice_id
 | `/dashboard/bovadas` | Vault management | Protected |
 | `/dashboard/transacciones` | Transaction history (local + Stellar) | Protected |
 | `/dashboard/configuracion` | Profile, PIN, voice preferences | Protected |
+| `/verify/:proofHash` | Public ZK proof verification | Public |
 
 ---
 
@@ -443,6 +540,8 @@ Rules
 | Blend yield integration (`blend.ts`) | ✅ Complete (best-effort) |
 | SEP-24 fiat on-ramp | 🔜 Post-hackathon |
 | Stellar Mainnet | 🔜 Post-hackathon |
+| ZK Proof-of-Vault (Groth16/BLS12-381) | ✅ Live on Testnet — `CAGUCQU...P7BU` |
+| ZK Proof-of-Consistent-Saving (RISC Zero) | 🔜 Attestation pattern — waiting CAP-0074 |
 
 ---
 
@@ -509,4 +608,4 @@ Built with 💜 in Lima, Peru.
 
 ---
 
-*Built on Stellar · Powered by Soroban · She Ships 2026 + Stellar Agentic Payments Hackathon 💜*
+*Built on Stellar · Powered by Soroban · She Ships 2026 + Stellar Agentic Payments Hackathon + Stellar Hacks Real-World ZK 💜*

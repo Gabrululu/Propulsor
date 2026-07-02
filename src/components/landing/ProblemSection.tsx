@@ -3,7 +3,7 @@ import { motion } from "framer-motion";
 const problemCards = [
   {
     value: "70%",
-    label: "de mujeres en Perú no tienen control real sobre sus finanzas",
+    label: "de trabajadores informales en Perú no tienen control real sobre sus finanzas",
     source: "BID, 2024",
     color: "pink" as const,
   },
@@ -15,7 +15,7 @@ const problemCards = [
   },
   {
     value: "23%",
-    label: "de mujeres jefas de hogar tienen algún tipo de ahorro formal",
+    label: "de hogares en la economía informal tienen algún tipo de ahorro formal",
     source: "INEI, 2024",
     color: "pink-soft" as const,
   },

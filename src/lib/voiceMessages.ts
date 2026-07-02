@@ -1,5 +1,5 @@
 export const ONBOARDING_WELCOME =
-  "Hola, bienvenida a Propulsor. Estoy aquí para ayudarte a proteger tu dinero. Solo toma 3 minutos. ¿Empezamos?";
+  "Hola, te damos la bienvenida a Propulsor. Estoy aquí para ayudarte a proteger tu dinero. Solo toma 3 minutos. ¿Empezamos?";
 
 export const PROFILE_DESCRIPTIONS: Record<string, string> = {
   jefa_hogar: "Gestiona los gastos del hogar y cuida a tu familia.",

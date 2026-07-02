@@ -15,6 +15,7 @@ import Onboarding from "./pages/Onboarding";
 import Auth from "./pages/Auth";
 import AuthCallback from "./pages/AuthCallback";
 import NotFound from "./pages/NotFound";
+import VerifyProof from "./pages/VerifyProof";
 
 const queryClient = new QueryClient();
 
@@ -43,6 +44,7 @@ const App = () => (
               <Route path="/dashboard/bovedas" element={<ProtectedRoute><Bovedas /></ProtectedRoute>} />
               <Route path="/dashboard/transacciones" element={<ProtectedRoute><Transacciones /></ProtectedRoute>} />
               <Route path="/dashboard/configuracion" element={<ProtectedRoute><Configuracion /></ProtectedRoute>} />
+              <Route path="/verify/:proofHash" element={<VerifyProof />} />
               <Route path="*" element={<NotFound />} />
             </Routes>
           </BrowserRouter>

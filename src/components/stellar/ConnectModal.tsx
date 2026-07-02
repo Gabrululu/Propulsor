@@ -103,9 +103,9 @@ const ConnectModal = ({ embedded = false, onConnected }: ConnectModalProps) => {
       setPublicKey(pk);
       setSection("custodial-done");
       onConnected("custodial", pk);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Custodial creation failed:", err);
-      setPinError(err?.message || "Error creando cuenta");
+      setPinError(err instanceof Error ? err.message : "Error creando cuenta");
       // Mark current active step as error
       setSteps(prev => prev.map(s => s.status === "active" ? { ...s, status: "error", detail: "Error" } : s));
     }
@@ -125,8 +125,8 @@ const ConnectModal = ({ embedded = false, onConnected }: ConnectModalProps) => {
       const { kit } = await import("@/lib/stellar/wallets-kit");
       const { address } = await kit.getAddress();
       onConnected("external", address);
-    } catch (err: any) {
-      setWalletError(err?.message || "No se pudo conectar");
+    } catch (err: unknown) {
+      setWalletError(err instanceof Error ? err.message : "No se pudo conectar");
       setSection("choose");
       setConnectingWallet(null);
     }

@@ -72,8 +72,8 @@ cp .env.example .env
 | `FACILITATOR_URL` | `https://www.x402.org/facilitator` | x402 payment facilitator |
 | `CONTRACT_ID` | `CCRH4EPUVIPESWYWOWPQ2QK3XN6KBR3RY6UFK36A4MXKKXIFH6ONRTVY` | SplitProtocol address |
 | `INTERNAL_API_KEY` | *(required for /split)* | Random secret shared with Supabase Edge Function |
-| `SUPABASE_URL` | *(optional)* | Supabase project URL — enables realtime feed writes |
-| `SUPABASE_SERVICE_ROLE_KEY` | *(optional)* | Service role key for writing to `transactions` table |
+| `SUPABASE_URL` | *(optional)* | Supabase project URL — required to reach `agent-webhook` |
+| `AGENT_WEBHOOK_SECRET` | *(optional)* | Shared secret with the `agent-webhook` Edge Function — enables transaction history + the dashboard's live Agent status card (`agent_status`/`agent_activity`). The agent never needs `SUPABASE_SERVICE_ROLE_KEY` directly — the Edge Function has it auto-injected. |
 
 ---
 
@@ -94,8 +94,10 @@ In the Railway dashboard → **Variables**, add every variable from `.env` plus:
 ```
 INTERNAL_API_KEY=<generate a random 32-char string>
 SUPABASE_URL=https://<your-project>.supabase.co
-SUPABASE_SERVICE_ROLE_KEY=<from Supabase → Settings → API>
+AGENT_WEBHOOK_SECRET=<generate a random 32-char string — must match the Supabase secret>
 ```
+
+Note: the agent never needs `SUPABASE_SERVICE_ROLE_KEY` — it only calls the `agent-webhook` Edge Function, which does the actual writes using its own auto-injected service role key (Supabase/Lovable Cloud inject this into every Edge Function automatically; it's never obtainable or needed outside of one).
 
 Generate a random key: `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`
 
@@ -114,11 +116,12 @@ This registers the 60/30/10 split rules on-chain under the server's address.
    ```bash
    supabase secrets set AGENT_SERVER_URL=https://propulsor-agent.railway.app
    supabase secrets set INTERNAL_API_KEY=<same key as Railway>
-   supabase secrets set SUPABASE_SERVICE_ROLE_KEY=<key>
+   supabase secrets set AGENT_WEBHOOK_SECRET=<same key as Railway>
    ```
-3. Deploy the Edge Function:
+3. Deploy the Edge Functions:
    ```bash
    supabase functions deploy agent-proxy
+   supabase functions deploy agent-webhook
    ```
 4. Add to your frontend `.env`:
    ```env
@@ -272,7 +275,11 @@ Horizon stream → USDC payment detected on WATCHED_ACCOUNT
   → POST /execute-split (X-PAYMENT header)
   → split executed on-chain
   → logs txHash + vault breakdown
+  → writes to `transactions` table (if Supabase configured)
+  → notifies `agent-webhook` (if AGENT_WEBHOOK_SECRET set) → dashboard status card updates live
 ```
+
+The monitor also notifies `agent-webhook` on startup (`agent_started`) and on split failures (`agent_error`), so the dashboard's Agent status card reflects whether the agent is actually running — not just whether the last split succeeded.
 
 ### Running the monitor
 

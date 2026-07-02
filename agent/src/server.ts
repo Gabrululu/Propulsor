@@ -146,7 +146,11 @@ async function runSplit(userPublicKey: string, incomeAmount: number) {
     .setTimeout(30)
     .build();
 
-  const preparedTx = await soroban.prepareTransaction(tx);
+  const sim = await soroban.simulateTransaction(tx);
+  if (SorobanRpc.Api.isSimulationError(sim)) {
+    throw new Error(`Simulation failed: ${sim.error}`);
+  }
+  const preparedTx = SorobanRpc.assembleTransaction(tx, sim).build();
   preparedTx.sign(serverKeypair);
 
   const sendResult = await soroban.sendTransaction(preparedTx);

@@ -1,0 +1,21 @@
+{
+  "name": "propulsor-zk",
+  "version": "0.1.0",
+  "description": "ZK Privacy Layer scripts for Propulsor",
+  "type": "module",
+  "scripts": {
+    "generate-proof": "tsx scripts/generate_proof.ts",
+    "verify-onchain": "tsx scripts/verify_onchain.ts",
+    "encode-vk": "tsx scripts/encode_vk.ts"
+  },
+  "dependencies": {
+    "@stellar/stellar-sdk": "^14.6.1",
+    "circomlib": "^2.0.5",
+    "snarkjs": "^0.7.5"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.0",
+    "tsx": "^4.15.6",
+    "typescript": "^5.4.5"
+  }
+}

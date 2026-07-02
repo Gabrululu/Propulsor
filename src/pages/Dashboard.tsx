@@ -5,6 +5,7 @@ import SplitBar from "@/components/SplitBar";
 import TxRow from "@/components/TxRow";
 import AgentStatusCard from "@/components/agent/AgentStatusCard";
 import AgentActivityFeed from "@/components/agent/AgentActivityFeed";
+import ZKProofPanel from "@/components/ZKProofPanel";
 import { useStellarBalance } from "@/hooks/useStellarBalance";
 import { useAgentStatus } from "@/hooks/useAgentStatus";
 import { getHorizonServer } from "@/lib/stellar/client";
@@ -146,7 +147,7 @@ const Dashboard = () => {
             },
           });
         streamRef.current = closeStream as unknown as () => void;
-      } catch {}
+      } catch { /* stream setup failed, proceed without live updates */ }
     };
     setupStream();
     return () => { if (streamRef.current) streamRef.current(); };
@@ -321,6 +322,9 @@ const Dashboard = () => {
         {/* Agent status + activity feed */}
         <AgentStatusCard />
         <AgentActivityFeed />
+
+        {/* ZK Privacy Layer */}
+        <ZKProofPanel />
 
         {/* Agent manual trigger — only when agent server is online */}
         {agentOnline && (

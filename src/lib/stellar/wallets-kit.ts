@@ -6,6 +6,19 @@
 
 import { NETWORK_PASSPHRASE } from "./client";
 
+declare global {
+  interface Window {
+    xBullSDK?: {
+      connect(opts: { canRequestPublicKey: boolean }): Promise<string>;
+      signXDR(xdr: string, opts: { network: string }): Promise<string>;
+    };
+    lobstrSignerExtension?: {
+      getPublicKey(): Promise<string>;
+      signTransaction(xdr: string): Promise<string>;
+    };
+  }
+}
+
 // ── Wallet IDs ──────────────────────────────────────────────
 export const FREIGHTER_ID = "freighter";
 export const XBULL_ID = "xbull";
@@ -79,8 +92,8 @@ function createGenericExtensionModule(id: WalletId, name: string, icon: string):
     name,
     icon,
     async isAvailable() {
-      if (id === XBULL_ID) return typeof (window as any).xBullSDK !== "undefined";
-      if (id === LOBSTR_ID) return typeof (window as any).lobstrSignerExtension !== "undefined";
+      if (id === XBULL_ID) return typeof window.xBullSDK !== "undefined";
+      if (id === LOBSTR_ID) return typeof window.lobstrSignerExtension !== "undefined";
       return false;
     },
     async requestAccess() {
@@ -88,20 +101,20 @@ function createGenericExtensionModule(id: WalletId, name: string, icon: string):
       return this.getAddress();
     },
     async getAddress() {
-      if (id === XBULL_ID && (window as any).xBullSDK) {
-        return (window as any).xBullSDK.connect({ canRequestPublicKey: true });
+      if (id === XBULL_ID && window.xBullSDK) {
+        return window.xBullSDK.connect({ canRequestPublicKey: true });
       }
-      if (id === LOBSTR_ID && (window as any).lobstrSignerExtension) {
-        return (window as any).lobstrSignerExtension.getPublicKey();
+      if (id === LOBSTR_ID && window.lobstrSignerExtension) {
+        return window.lobstrSignerExtension.getPublicKey();
       }
       throw new Error(`${name} no está instalado. Instala la extensión y recarga la página.`);
     },
     async signTransaction(txXdr, opts) {
-      if (id === XBULL_ID && (window as any).xBullSDK) {
-        return (window as any).xBullSDK.signXDR(txXdr, { network: opts.networkPassphrase });
+      if (id === XBULL_ID && window.xBullSDK) {
+        return window.xBullSDK.signXDR(txXdr, { network: opts.networkPassphrase });
       }
-      if (id === LOBSTR_ID && (window as any).lobstrSignerExtension) {
-        return (window as any).lobstrSignerExtension.signTransaction(txXdr);
+      if (id === LOBSTR_ID && window.lobstrSignerExtension) {
+        return window.lobstrSignerExtension.signTransaction(txXdr);
       }
       throw new Error(`${name} no está instalado`);
     },

@@ -35,7 +35,7 @@ export function useStellarFees(): FeeEstimate {
             const priceData = await priceRes.json();
             xlmPrice = priceData.stellar?.usd ?? 0.1;
           }
-        } catch {}
+        } catch { /* price fetch failed, keep default */ }
 
         setEstimate({
           baseFeeStroops: baseFee,

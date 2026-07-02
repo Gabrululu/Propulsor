@@ -6,7 +6,7 @@ const checklistItems = [
   { text: "Conversión automática soles → USDC", color: "mint" },
   { text: "Sin banco, sin permiso, sin intermediarios", color: "pink" },
   { text: "Smart contracts en Soroban", color: "mint" },
-  { text: "Diseñada para mujeres jefas de hogar", color: "pink" },
+  { text: "Diseñada para la economía informal", color: "pink" },
 ];
 
 const WaitlistSection = () => {

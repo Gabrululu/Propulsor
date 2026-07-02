@@ -57,8 +57,12 @@ export interface LockResult {
 
 // ── Helpers ──────────────────────────────────────────────────
 
+let _rpcServer: S.rpc.Server | null = null;
 function rpcServer(): S.rpc.Server {
-  return new S.rpc.Server(SOROBAN_RPC_URL, { allowHttp: false });
+  if (!_rpcServer) {
+    _rpcServer = new S.rpc.Server(SOROBAN_RPC_URL, { allowHttp: false });
+  }
+  return _rpcServer;
 }
 
 function addressVal(pk: string): S.xdr.ScVal {

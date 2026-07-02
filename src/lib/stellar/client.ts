@@ -17,14 +17,55 @@ export const VAULT_CONTRACT_ID =
   import.meta.env.VITE_VAULT_CONTRACT_ID || "CC73UGT72A2MOZOSK6WFWMMIL32OJPJSPKEBFNBLK2GZJYNORERTSSWX";
 export const isSimulationMode = !SPLIT_CONTRACT_ID;
 
-// Lazy-loaded server instances to avoid top-level SDK access issues
-let _horizonServer: any = null;
-let _sorobanServer: any = null;
+export interface HorizonTxRecord {
+  id: string;
+  hash: string;
+  created_at: string;
+  operation_count: number;
+  successful: boolean;
+  memo?: string;
+}
 
-export async function getHorizonServer() {
+interface HorizonFeeStats {
+  fee_charged: { mode: string };
+}
+
+interface HorizonClient {
+  loadAccount(publicKey: string): Promise<unknown>;
+  feeStats(): Promise<HorizonFeeStats>;
+  ledgers(): { limit(n: number): { call(): Promise<unknown> } };
+  transactions(): {
+    forAccount(publicKey: string): {
+      order(dir: string): {
+        limit(n: number): { call(): Promise<{ records: HorizonTxRecord[] }> };
+      };
+    };
+  };
+  payments(): {
+    forAccount(publicKey: string): {
+      stream(opts: { onmessage: (msg: unknown) => void }): () => void;
+    };
+  };
+}
+
+interface SdkModuleShape {
+  Horizon?: { Server?: new (url: string) => HorizonClient };
+  SorobanRpc?: { Server?: new (url: string) => unknown };
+  Soroban?: { Server?: new (url: string) => unknown };
+  default?: {
+    Horizon?: { Server?: new (url: string) => HorizonClient };
+    SorobanRpc?: { Server?: new (url: string) => unknown };
+  };
+}
+
+// Lazy-loaded server instances to avoid top-level SDK access issues
+let _horizonServer: HorizonClient | null = null;
+let _sorobanServer: unknown = null;
+
+export async function getHorizonServer(): Promise<HorizonClient> {
   if (!_horizonServer) {
-    const sdk = await import("@stellar/stellar-sdk");
-    const HorizonModule = sdk.Horizon ?? (sdk as any).default?.Horizon ?? (sdk as any);
+    const sdk = await import("@stellar/stellar-sdk") as unknown as SdkModuleShape;
+    const HorizonModule = sdk.Horizon ?? sdk.default?.Horizon;
     if (HorizonModule?.Server) {
       _horizonServer = new HorizonModule.Server(HORIZON_URL);
     } else {
@@ -35,23 +76,21 @@ export async function getHorizonServer() {
   return _horizonServer;
 }
 
-export async function getSorobanServer() {
+export async function getSorobanServer(): Promise<unknown> {
   if (!_sorobanServer) {
     try {
-      const sdk = await import("@stellar/stellar-sdk");
-      const SorobanModule = (sdk as any).SorobanRpc ?? (sdk as any).Soroban ?? (sdk as any).default?.SorobanRpc;
+      const sdk = await import("@stellar/stellar-sdk") as unknown as SdkModuleShape;
+      const SorobanModule = sdk.SorobanRpc ?? sdk.Soroban ?? sdk.default?.SorobanRpc;
       if (SorobanModule?.Server) {
         _sorobanServer = new SorobanModule.Server(SOROBAN_RPC_URL);
       }
-    } catch {
-      // Soroban server not available
-    }
+    } catch { /* Soroban server not available */ }
   }
   return _sorobanServer;
 }
 
 // Fallback Horizon client using raw fetch (works regardless of SDK version)
-function createFallbackHorizonClient() {
+function createFallbackHorizonClient(): HorizonClient {
   return {
     async loadAccount(publicKey: string) {
       const res = await fetch(`${HORIZON_URL}/accounts/${publicKey}`);
@@ -60,7 +99,7 @@ function createFallbackHorizonClient() {
     },
     async feeStats() {
       const res = await fetch(`${HORIZON_URL}/fee_stats`);
-      return res.json();
+      return res.json() as Promise<HorizonFeeStats>;
     },
     ledgers() {
       return {
@@ -82,12 +121,12 @@ function createFallbackHorizonClient() {
               return {
                 limit(n: number) {
                   return {
-                    async call() {
+                    async call(): Promise<{ records: HorizonTxRecord[] }> {
                       const res = await fetch(
                         `${HORIZON_URL}/accounts/${publicKey}/transactions?limit=${n}&order=${dir}`
                       );
                       if (!res.ok) return { records: [] };
-                      const data = await res.json();
+                      const data = await res.json() as { _embedded?: { records?: HorizonTxRecord[] } };
                       return { records: data._embedded?.records ?? [] };
                     }
                   };
@@ -102,7 +141,7 @@ function createFallbackHorizonClient() {
       return {
         forAccount(publicKey: string) {
           return {
-            stream(opts: { onmessage: (msg: any) => void }) {
+            stream(opts: { onmessage: (msg: unknown) => void }) {
               // EventSource streaming
               try {
                 const es = new EventSource(
@@ -110,9 +149,9 @@ function createFallbackHorizonClient() {
                 );
                 es.onmessage = (event) => {
                   try {
-                    const data = JSON.parse(event.data);
+                    const data: unknown = JSON.parse(event.data as string);
                     opts.onmessage(data);
-                  } catch {}
+                  } catch { /* JSON parse failed */ }
                 };
                 return () => es.close();
               } catch {

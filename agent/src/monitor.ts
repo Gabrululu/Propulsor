@@ -23,7 +23,7 @@ import {
   encodePaymentSignatureHeader,
 } from '@x402/core/http';
 import { depositToBlend } from './blend.js';
-import { recordAgentSplit } from './supabase.js';
+import { notifyAgentWebhook } from './supabase.js';
 
 // ---------------------------------------------------------------------------
 // Config
@@ -191,8 +191,11 @@ function startStream(): () => void {
         log(`  Amount:  ${p.amount} USDC`);
         log(`  TxHash:  ${p.transaction_hash}`);
 
-        // Convert USDC amount (7 decimal places) to stroops-equivalent integer
-        const incomeAmount = Math.round(parseFloat(p.amount) * 10_000_000);
+        // Convert USDC amount string (7 decimal places) to stroops without float precision loss
+        const [whole, frac = ''] = p.amount.split('.');
+        const incomeAmount = Number(
+          BigInt(whole) * 10_000_000n + BigInt(frac.padEnd(7, '0').slice(0, 7))
+        );
 
         try {
           logSection('x402 PAYMENT FLOW — calling /execute-split');
@@ -205,12 +208,17 @@ function startStream(): () => void {
             const usdcAmount = (Number(vault.balance) / 10_000_000).toFixed(7);
             log(`    Vault ${vault.vaultId}: ${vault.balance} stroops  (${usdcAmount} USDC)`);
           }
-          // ── Write to Supabase for realtime frontend feed ─────────────────
-          await recordAgentSplit({
+          // ── Notify agent-webhook so the dashboard status card updates ────
+          // (this also records the split in the user's transaction history —
+          // the agent has no service_role access, so the Edge Function does it)
+          await notifyAgentWebhook({
             watchedAccount: WATCHED_ACCOUNT,
-            incomeAmount,
+            eventType: 'split_executed',
+            amountUsdc: incomeAmount / 10_000_000,
             txHash: result.txHash,
-            vaultBreakdown: result.vaultBreakdown,
+            vaultBreakdown: Object.fromEntries(
+              result.vaultBreakdown.map((v) => [`vault_${v.vaultId}`, Number(v.balance) / 10_000_000]),
+            ),
           });
 
           log('');
@@ -233,6 +241,14 @@ function startStream(): () => void {
                 log(`  💰 vault_2: ${vault2Usdc} USDC deposited to Blend → earning yield`);
                 log(`  Blend txHash:       ${blendResult.txHash}`);
                 log(`  bTokens received:   ${blendResult.blendTokensReceived}`);
+
+                await notifyAgentWebhook({
+                  watchedAccount: WATCHED_ACCOUNT,
+                  eventType: 'blend_deposited',
+                  amountUsdc: vault2Stroops / 10_000_000,
+                  blendTxHash: blendResult.txHash,
+                  blendSuccess: true,
+                });
               } catch (blendErr) {
                 log('  ⚠️  Blend unavailable, vault_2 held in Stellar account');
                 log(`  (${blendErr instanceof Error ? blendErr.message : String(blendErr)})`);
@@ -241,10 +257,17 @@ function startStream(): () => void {
             }
           }
         } catch (err) {
+          const message = err instanceof Error ? err.message : String(err);
           logSection('SPLIT FAILED');
-          log(`  Error: ${err instanceof Error ? err.message : String(err)}`);
+          log(`  Error: ${message}`);
           log('  (Not retrying to avoid infinite loops)');
           log('');
+
+          await notifyAgentWebhook({
+            watchedAccount: WATCHED_ACCOUNT,
+            eventType: 'agent_error',
+            errorMessage: message,
+          });
         }
       },
 
@@ -273,6 +296,8 @@ log(`  Blend deposit:     ${VAULT2_SECRET && VAULT2_PUBLIC_KEY ? `enabled (vault
 log('');
 log('Waiting for incoming USDC payments...');
 log('');
+
+void notifyAgentWebhook({ watchedAccount: WATCHED_ACCOUNT, eventType: 'agent_started' });
 
 startStream();
 

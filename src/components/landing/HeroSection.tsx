@@ -92,7 +92,7 @@ const HeroSection = () => {
           <div className="md:col-span-6 grid grid-cols-3 gap-6">
             <div>
               <span className="font-mono text-2xl md:text-3xl font-bold text-pink">7 de 10</span>
-              <p className="text-body-muted text-xs mt-1">mujeres en Perú sin cuenta bancaria propia</p>
+              <p className="text-body-muted text-xs mt-1">trabajadores informales en Perú sin cuenta bancaria propia</p>
             </div>
             <div>
               <span className="font-mono text-2xl md:text-3xl font-bold text-mint">$0.00001</span>

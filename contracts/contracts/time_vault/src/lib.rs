@@ -198,7 +198,10 @@ impl TimeVault {
             None => panic_with_error!(&env, VaultError::NoLockFound),
         };
 
-        lock.locked_amount += amount;
+        lock.locked_amount = match lock.locked_amount.checked_add(amount) {
+            Some(v) => v,
+            None => panic_with_error!(&env, VaultError::InvalidAmount),
+        };
         env.storage().persistent().set(&key, &lock);
         // FIX #1 — refresh TTL on every deposit so the lock doesn't expire
         // between the user's periodic contributions.

@@ -135,7 +135,10 @@ impl SplitProtocol {
 
         for i in 0..rules.len() {
             let rule = rules.get(i).unwrap();
-            let amount = income * rule.percentage as i128 / 100;
+            let amount = match income.checked_mul(rule.percentage as i128) {
+                Some(v) => v / 100,
+                None => panic_with_error!(&env, SplitError::InvalidIncome),
+            };
             total_distributed += amount;
 
             let mut found_idx: Option<u32> = None;

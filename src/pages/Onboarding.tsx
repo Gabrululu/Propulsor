@@ -18,9 +18,9 @@ import {
 } from "@/lib/voiceMessages";
 
 const profileTypes = [
-  { key: "jefa_hogar", icon: "🏠", label: "Jefa de hogar", split: [60, 30, 10] },
-  { key: "emprendedora", icon: "🛍️", label: "Emprendedora", split: [40, 30, 30] },
-  { key: "trabajadora", icon: "💼", label: "Trabajadora dependiente", split: [50, 35, 15] },
+  { key: "jefa_hogar", icon: "🏠", label: "Responsable del hogar", split: [60, 30, 10] },
+  { key: "emprendedora", icon: "🛍️", label: "Negocio propio", split: [40, 30, 30] },
+  { key: "trabajadora", icon: "💼", label: "Empleo fijo", split: [50, 35, 15] },
   { key: "freelancer", icon: "💻", label: "Freelancer", split: [45, 30, 25] },
 ];
 

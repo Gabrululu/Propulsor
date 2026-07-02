@@ -1,7 +1,7 @@
 const MarqueeTicker = () => {
   const items = [
     { text: "Independencia financiera", color: "pink" },
-    { text: "Mujeres jefas de hogar", color: "mint" },
+    { text: "Economía informal LATAM", color: "mint" },
     { text: "Remesas protegidas", color: "pink" },
     { text: "Soroban Smart Contracts", color: "mint" },
     { text: "Time-Lock Vaults", color: "pink" },

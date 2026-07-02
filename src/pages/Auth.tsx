@@ -83,8 +83,8 @@ const Auth = () => {
           toast.success("Revisa tu correo para verificar tu cuenta");
         }
       }
-    } catch (err: any) {
-      toast.error(err.message || "Error de autenticación");
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Error de autenticación");
     } finally {
       setLoading(false);
     }
@@ -177,9 +177,9 @@ const Auth = () => {
 
       toast.success(`Conectado con ${walletName}`);
       navigate("/onboarding");
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Wallet auth error:", err);
-      const msg = err?.message || "No se pudo conectar la wallet";
+      const msg = err instanceof Error ? err.message : "No se pudo conectar la wallet";
 
       // Friendly messages for common errors
       if (msg.includes("no está instalado") || msg.includes("not installed")) {

@@ -70,9 +70,9 @@ const Configuracion = () => {
   };
 
   const profileLabels: Record<string, string> = {
-    jefa_hogar: "Jefa de hogar",
-    emprendedora: "Emprendedora",
-    trabajadora: "Trabajadora",
+    jefa_hogar: "Responsable del hogar",
+    emprendedora: "Negocio propio",
+    trabajadora: "Empleo fijo",
     freelancer: "Freelancer",
   };
 

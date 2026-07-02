@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { getHorizonServer, STELLAR_EXPLORER_BASE } from "@/lib/stellar/client";
+import { getHorizonServer, STELLAR_EXPLORER_BASE, type HorizonTxRecord } from "@/lib/stellar/client";
 
 export interface StellarTransaction {
   id: string;
@@ -29,7 +29,7 @@ export function useStellarTransactions(publicKey: string | null) {
           .limit(20)
           .call();
 
-        const txs: StellarTransaction[] = response.records.map((record: any) => ({
+        const txs: StellarTransaction[] = response.records.map((record: HorizonTxRecord) => ({
           id: record.id,
           hash: record.hash,
           timestamp: record.created_at,
