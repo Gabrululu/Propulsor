@@ -6,7 +6,7 @@ import ProblemSection from "@/components/landing/ProblemSection";
 import HowItWorksSection from "@/components/landing/HowItWorksSection";
 import VaultsSection from "@/components/landing/VaultsSection";
 import TestimonialsSection from "@/components/landing/TestimonialsSection";
-import PeruSection from "@/components/landing/PeruSection";
+import LatamSection from "@/components/landing/LatamSection";
 import PrivacySection from "@/components/landing/PrivacySection";
 
 import ManifestoSection from "@/components/landing/ManifestoSection";
@@ -23,7 +23,7 @@ const Index = () => {
         <HowItWorksSection />
         <VaultsSection />
         <TestimonialsSection />
-        <PeruSection />
+        <LatamSection />
         <PrivacySection />
 
         <ManifestoSection />

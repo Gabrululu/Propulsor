@@ -11,7 +11,7 @@ const Navbar = () => {
         <Link to="/" className="flex items-center gap-2">
           <span className="text-pink font-bold text-lg tracking-tight">PROPULSOR</span>
           <span className="font-mono text-[9px] text-dimmed border border-pink-subtle px-1.5 py-0.5 rounded-sm">
-            SHE SHIPS 2026
+            STELLAR HACKS
           </span>
         </Link>
 

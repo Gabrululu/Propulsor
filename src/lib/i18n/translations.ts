@@ -16,7 +16,7 @@ export const translations = {
       description:
         "Separa, protege y ahorra tu dinero automáticamente con bóvedas inteligentes en Stellar. Sin banco. Sin permiso. Solo tú.",
       stat1Value: "7 de 10",
-      stat1Label: "trabajadores informales en Perú sin cuenta bancaria propia",
+      stat1Label: "trabajadores informales en LATAM sin cuenta bancaria propia",
       stat2Label: "Fee por transacción en Stellar",
       stat3Value: "5s",
       stat3Label: "Para separar y proteger tu dinero",
@@ -35,7 +35,7 @@ export const translations = {
       "Agente Autónomo",
       "x402 Payments",
       "Blend Protocol",
-      "She Ships 2026 💜",
+      "Stellar Hacks",
     ],
     problem: {
       sectionLabel: "// SECCIÓN 00",
@@ -44,7 +44,7 @@ export const translations = {
       cards: [
         {
           value: "70%",
-          label: "de trabajadores informales en Perú no tienen control real sobre sus finanzas",
+          label: "de trabajadores informales en Latinoamérica no tienen control real sobre sus finanzas",
           source: "BID, 2024",
         },
         {
@@ -140,13 +140,13 @@ export const translations = {
         },
       ],
     },
-    peru: {
+    latam: {
       sectionLabel: "// SECCIÓN 04",
       titlePart1: "HECHO PARA ",
-      titlePart2: "PERÚ",
+      titlePart2: "LATAM",
       amount: "S/1000",
       description:
-        "Depositas mil soles. En 5 segundos, un anchor convierte a USDC y Soroban los separa en tus 3 bóvedas. Sin banco. Sin espera. Sin permiso.",
+        "Funciona en toda Latinoamérica. Por ejemplo, en Perú: depositas mil soles, en 5 segundos un anchor los convierte a USDC y Soroban los separa en tus 3 bóvedas. Sin banco. Sin espera. Sin permiso.",
       cta: "→ Quiero acceso anticipado",
       flowSteps: ["Recibes S/", "Anchor SEP-24\nconvierte", "Soroban\nejecuta", "Retiras\nUSDC", "3 bóvedas\nactivas"],
     },
@@ -193,7 +193,7 @@ export const translations = {
       sheShipsHeading: "Stellar Hacks",
       sheShipsBody: "Proyecto presentado en She Ships 2026 & Stellar Hacks",
       copyright: "© 2026 Propulsor. Todos los derechos reservados.",
-      tagline2: "Stellar · Soroban · USDC · Perú 🇵🇪",
+      tagline2: "Stellar · Soroban · USDC · LATAM 🌎",
     },
     simulate: {
       eyebrow: "SIMULADOR",
@@ -233,7 +233,7 @@ export const translations = {
       description:
         "Automatically split, protect, and save your money with smart vaults on Stellar. No bank. No permission. Just you.",
       stat1Value: "7 in 10",
-      stat1Label: "informal workers in Peru with no bank account of their own",
+      stat1Label: "informal workers in LATAM with no bank account of their own",
       stat2Label: "Fee per transaction on Stellar",
       stat3Value: "5s",
       stat3Label: "To split and protect your money",
@@ -252,7 +252,7 @@ export const translations = {
       "Autonomous Agent",
       "x402 Payments",
       "Blend Protocol",
-      "She Ships 2026 💜",
+      "Stellar Hacks",
     ],
     problem: {
       sectionLabel: "// SECTION 00",
@@ -261,7 +261,7 @@ export const translations = {
       cards: [
         {
           value: "70%",
-          label: "of informal workers in Peru have no real control over their finances",
+          label: "of informal workers in Latin America have no real control over their finances",
           source: "IDB, 2024",
         },
         {
@@ -357,13 +357,13 @@ export const translations = {
         },
       ],
     },
-    peru: {
+    latam: {
       sectionLabel: "// SECTION 04",
       titlePart1: "MADE FOR ",
-      titlePart2: "PERU",
+      titlePart2: "LATAM",
       amount: "S/1000",
       description:
-        "Deposit a thousand soles. In 5 seconds, an anchor converts it to USDC and Soroban splits it into your 3 vaults. No bank. No waiting. No permission.",
+        "Works across Latin America. For example, in Peru: deposit a thousand soles, in 5 seconds an anchor converts it to USDC and Soroban splits it into your 3 vaults. No bank. No waiting. No permission.",
       cta: "→ I want early access",
       flowSteps: ["Receive S/", "SEP-24 anchor\nconverts", "Soroban\nexecutes", "Withdraw\nUSDC", "3 vaults\nactive"],
     },
@@ -410,7 +410,7 @@ export const translations = {
       sheShipsHeading: "Stellar Hacks",
       sheShipsBody: "Presented at She Ships 2026 & Stellar Hacks",
       copyright: "© 2026 Propulsor. All rights reserved.",
-      tagline2: "Stellar · Soroban · USDC · Peru 🇵🇪",
+      tagline2: "Stellar · Soroban · USDC · LATAM 🌎",
     },
     simulate: {
       eyebrow: "SIMULATOR",
