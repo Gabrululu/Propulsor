@@ -1,4 +1,6 @@
 import { useState, useRef, useCallback } from "react";
+import { supabase } from "@/integrations/supabase/client";
+import { SUPABASE_URL } from "@/lib/supabase/config";
 
 const audioCache = new Map<string, Blob>();
 
@@ -69,26 +71,26 @@ export function useVoice() {
         let blob = audioCache.get(text);
 
         if (!blob) {
-          const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-          const supabaseKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+          // Use the current user's session JWT — the anon key alone doesn't
+          // identify a specific user for the tts function to authorize against.
+          const { data: { session } } = await supabase.auth.getSession();
+          if (!session?.access_token) return; // Not authenticated, fail silently
 
-          if (supabaseUrl && supabaseKey) {
-            const response = await fetch(`${supabaseUrl}/functions/v1/tts`, {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-                apikey: supabaseKey,
-                Authorization: `Bearer ${supabaseKey}`,
-              },
-              body: JSON.stringify({ text }),
-            });
+          const response = await fetch(`${SUPABASE_URL}/functions/v1/tts`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${session.access_token}`,
+            },
+            body: JSON.stringify({ text }),
+          });
 
-            if (response.ok) {
-              const candidate = await response.blob();
-              if (candidate.size > 0) blob = candidate;
-              audioCache.set(text, blob!);
-            }
-          }
+          if (!response.ok) return; // Fail silently
+
+          blob = await response.blob();
+          if (blob.size === 0) return;
+
+          audioCache.set(text, blob);
         }
 
         if (blob) {

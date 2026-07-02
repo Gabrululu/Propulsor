@@ -11,6 +11,7 @@ import {
   LOBSTR_ID,
   type WalletId,
 } from "@/lib/stellar/wallets-kit";
+import { SUPABASE_URL } from "@/lib/supabase/config";
 
 const stellarWallets: { id: WalletId; name: string; icon: string; recommended?: boolean }[] = [
   { id: FREIGHTER_ID, name: "Freighter", icon: "🚀", recommended: true },
@@ -18,6 +19,24 @@ const stellarWallets: { id: WalletId; name: string; icon: string; recommended?: 
   { id: ALBEDO_ID, name: "Albedo", icon: "🌅" },
   { id: LOBSTR_ID, name: "Lobstr", icon: "🦞" },
 ];
+
+const authErrors: Record<string, string> = {
+  "Invalid login credentials": "Correo o contraseña incorrectos",
+  "invalid user": "Correo o contraseña incorrectos",
+  "Email not confirmed": "Confirma tu correo antes de ingresar",
+  "User already registered": "Ya tienes una cuenta, inicia sesión",
+  "Password should be at least 6 characters": "La contraseña debe tener al menos 6 caracteres",
+  "Unable to validate email address": "Correo inválido",
+  "Signup requires a valid password": "La contraseña debe tener al menos 6 caracteres",
+};
+
+function getFriendlyAuthError(message?: string): string {
+  if (!message) return "Ocurrió un error, intenta de nuevo";
+  for (const [key, value] of Object.entries(authErrors)) {
+    if (message.includes(key)) return value;
+  }
+  return message;
+}
 
 const Auth = () => {
   const [isLogin, setIsLogin] = useState(true);
@@ -27,17 +46,44 @@ const Auth = () => {
   const [verificationSent, setVerificationSent] = useState(false);
   const [walletLoading, setWalletLoading] = useState<string | null>(null);
   const [walletError, setWalletError] = useState("");
-  const [socialLoading, setSocialLoading] = useState<string | null>(null);
+  const [authError, setAuthError] = useState("");
+  const [debugStatus, setDebugStatus] = useState("idle");
+  const [debugError, setDebugError] = useState("");
+  const [forgotMode, setForgotMode] = useState(false);
+  const [forgotLoading, setForgotLoading] = useState(false);
   const navigate = useNavigate();
   const { reconnect, connectSocial } = useWallet();
+
+  const isDev = import.meta.env.DEV;
+
+  const handleForgotPassword = async () => {
+    if (!email.trim()) {
+      toast.error("Ingresa tu correo primero");
+      return;
+    }
+    setForgotLoading(true);
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: `${window.location.origin}/reset-password`,
+    });
+    setForgotLoading(false);
+    if (error) {
+      toast.error(getFriendlyAuthError(error.message));
+    } else {
+      toast.success("Te enviamos un correo para restablecer tu contraseña");
+      setForgotMode(false);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email.trim() || !password.trim()) return;
 
     setLoading(true);
+    setAuthError("");
+    setDebugError("");
     try {
       if (isLogin) {
+        setDebugStatus("login:loading");
         const { data: signInData, error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
 
@@ -62,45 +108,54 @@ const Auth = () => {
             }
           }
 
-          navigate(profile?.onboarding_complete ? "/dashboard" : "/onboarding");
+          const nextPath = profile?.onboarding_complete ? "/dashboard" : "/onboarding";
+          setDebugStatus(`login:success -> ${nextPath}`);
+          navigate(nextPath);
         } else {
+          setDebugStatus("login:success -> /onboarding");
           navigate("/onboarding");
         }
       } else {
+        setDebugStatus("signup:loading");
         const { data: signUpData, error } = await supabase.auth.signUp({
           email,
           password,
-          options: { emailRedirectTo: `${window.location.origin}/auth/callback` },
+          options: {
+            emailRedirectTo: `${window.location.origin}/auth/callback`,
+            data: { auth_method: "email_password" },
+          },
         });
         if (error) throw error;
 
-        // If email confirmation is disabled, signUp returns a session immediately
-        if (signUpData.session) {
+        // If email confirmation is disabled, signUp returns a session immediately.
+        // Otherwise, try signing in right away in case confirmation isn't actually required.
+        let session = signUpData.session;
+        if (!session) {
+          const { data: retryData } = await supabase.auth.signInWithPassword({ email, password });
+          session = retryData.session;
+        }
+
+        if (session) {
           await connectSocial(signUpData.user!.id);
+          setDebugStatus("signup:success -> /onboarding");
+          toast.success("Cuenta creada. Vamos a configurar tu Propulsor.");
           navigate("/onboarding");
         } else {
           setVerificationSent(true);
+          setDebugStatus("signup:pending");
           toast.success("Revisa tu correo para verificar tu cuenta");
         }
       }
     } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : "Error de autenticación");
+      const rawMessage = err instanceof Error ? err.message : undefined;
+      const friendlyMessage = getFriendlyAuthError(rawMessage);
+      setAuthError(friendlyMessage);
+      setDebugStatus(isLogin ? "login:error" : "signup:error");
+      setDebugError(rawMessage ?? "Error de autenticación");
+      toast.error(friendlyMessage);
     } finally {
       setLoading(false);
     }
-  };
-
-  const handleSocialLogin = async (provider: "google" | "github") => {
-    setSocialLoading(provider);
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider,
-      options: { redirectTo: `${window.location.origin}/auth/callback` },
-    });
-    if (error) {
-      toast.error(error.message || "Error con login social");
-      setSocialLoading(null);
-    }
-    // On success Supabase redirects the browser — no further action needed
   };
 
   const walletInstallUrls: Record<string, string> = {
@@ -114,6 +169,7 @@ const Auth = () => {
     const walletName = stellarWallets.find(w => w.id === walletId)?.name ?? walletId;
     setWalletLoading(walletId);
     setWalletError("");
+    setAuthError("");
 
     try {
       // Check availability
@@ -241,6 +297,18 @@ const Auth = () => {
 
         {/* Email/password form */}
         <form onSubmit={handleSubmit} className="space-y-4">
+          {authError && (
+            <div
+              className="rounded-sm border px-4 py-3"
+              style={{
+                borderColor: "hsl(var(--primary) / 0.35)",
+                backgroundColor: "hsl(var(--primary) / 0.08)",
+              }}
+            >
+              <p className="text-sm text-primary font-medium">{authError}</p>
+            </div>
+          )}
+
           <div>
             <label className="block text-sm text-foreground font-semibold uppercase tracking-wider mb-2">
               Correo electrónico
@@ -268,7 +336,41 @@ const Auth = () => {
               minLength={6}
               required
             />
+            {isLogin && (
+              <button
+                type="button"
+                onClick={() => setForgotMode(true)}
+                className="text-xs font-mono hover:text-foreground transition-colors mt-1"
+                style={{ color: "hsl(330, 8%, 56%)" }}
+              >
+                ¿Olvidaste tu contraseña?
+              </button>
+            )}
           </div>
+
+          {forgotMode && (
+            <div className="rounded-sm border border-border bg-card p-4 space-y-3">
+              <p className="text-sm text-muted-foreground">
+                Ingresa tu correo arriba y haz clic para recibir un link de recuperación.
+              </p>
+              <button
+                type="button"
+                onClick={handleForgotPassword}
+                disabled={forgotLoading}
+                className="btn-pink w-full rounded-sm text-center text-sm"
+                style={{ opacity: forgotLoading ? 0.6 : 1 }}
+              >
+                {forgotLoading ? "Enviando..." : "Enviar link de recuperación →"}
+              </button>
+              <button
+                type="button"
+                onClick={() => setForgotMode(false)}
+                className="text-xs font-mono text-muted-foreground hover:text-foreground transition-colors"
+              >
+                ← Cancelar
+              </button>
+            </div>
+          )}
 
           <button
             type="submit"
@@ -279,43 +381,6 @@ const Auth = () => {
             {loading ? "Procesando..." : isLogin ? "Entrar →" : "Crear cuenta →"}
           </button>
         </form>
-
-        {/* Social login divider */}
-        <div className="flex items-center gap-3 my-6">
-          <div className="flex-1 h-px bg-border" />
-          <span className="font-mono text-[0.6rem] text-muted-foreground uppercase tracking-wider">
-            O continúa con
-          </span>
-          <div className="flex-1 h-px bg-border" />
-        </div>
-
-        {/* Social buttons */}
-        <div className="grid grid-cols-2 gap-3">
-          <button
-            onClick={() => handleSocialLogin("google")}
-            disabled={!!socialLoading}
-            className="flex items-center justify-center gap-2 p-3 rounded-sm border border-border bg-muted hover:bg-card hover:border-primary transition-all text-sm text-foreground disabled:opacity-50"
-          >
-            {socialLoading === "google" ? (
-              <span className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-            ) : (
-              <span className="text-lg">G</span>
-            )}
-            <span className="font-mono text-xs">Google</span>
-          </button>
-          <button
-            onClick={() => handleSocialLogin("github")}
-            disabled={!!socialLoading}
-            className="flex items-center justify-center gap-2 p-3 rounded-sm border border-border bg-muted hover:bg-card hover:border-primary transition-all text-sm text-foreground disabled:opacity-50"
-          >
-            {socialLoading === "github" ? (
-              <span className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-            ) : (
-              <span className="text-lg">⌥</span>
-            )}
-            <span className="font-mono text-xs">GitHub</span>
-          </button>
-        </div>
 
         {/* Stellar wallet divider */}
         <div className="flex items-center gap-3 my-6">
@@ -382,6 +447,21 @@ const Auth = () => {
             {isLogin ? "Regístrate" : "Inicia sesión"}
           </button>
         </p>
+
+        {isDev && (
+          <div className="mt-6 rounded-sm border border-border bg-card p-4 space-y-2">
+            <p className="font-mono text-[0.65rem] uppercase tracking-widest text-primary">Auth debug</p>
+            <p className="text-xs text-muted-foreground font-mono break-all">
+              URL: {SUPABASE_URL.slice(0, 30)}...
+            </p>
+            <p className="text-xs text-muted-foreground font-mono">
+              Estado: <span className="text-foreground">{debugStatus}</span>
+            </p>
+            <p className="text-xs text-primary font-mono break-words min-h-4">
+              {debugError || "Sin errores"}
+            </p>
+          </div>
+        )}
       </div>
     </div>
   );
