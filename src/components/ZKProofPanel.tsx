@@ -31,7 +31,8 @@ type ProofState =
 // Deployed ProofOfVaultVerifier contract on Stellar Testnet
 // Update after deploying with: stellar contract deploy ...
 const VERIFIER_CONTRACT_ID =
-  import.meta.env.VITE_ZK_VERIFIER_CONTRACT_ID ?? "TBD_AFTER_DEPLOY";
+  import.meta.env.VITE_ZK_VERIFIER_CONTRACT_ID ||
+  "CAGUCQUMNSOJALPFM3A2T2TBDIDCFUDY3UQA6JIWAN4ZP3COPQ7HP7BU";
 
 // ── Helpers ───────────────────────────────────────────────────────────────
 
