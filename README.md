@@ -238,7 +238,7 @@ STELLAR_SECRET=S... npx tsx scripts/deploy_contract.ts
 # → copy the contract ID to VITE_ZK_VERIFIER_CONTRACT_ID in .env
 # (deploys and initializes with the VK atomically — no separate init step needed)
 
-# 6. Generate + verify a proof via CLI (the UI does this automatically)
+# 5. Generate + verify a proof via CLI (the UI does this automatically)
 npx tsx scripts/generate_proof.ts --balance 1000000000 --threshold 500000000
 STELLAR_SECRET=S... VERIFIER_CONTRACT_ID=C... npx tsx scripts/verify_onchain.ts
 ```
@@ -305,12 +305,14 @@ Stellar Testnet → Mainnet
 
 ## Environment Variables
 
+This is for the **frontend** (root `.env`) — not to be confused with `agent/.env`, covered in [Step 4](#step-4--configure-environment-variables) above. Every `VITE_`-prefixed value here is baked into the browser bundle at build time and is publicly readable — never put real secrets behind a `VITE_` name.
+
 Create `.env` in the project root:
 
 ```env
 # Supabase
 VITE_SUPABASE_URL=your_supabase_url
-VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
+VITE_SUPABASE_PUBLISHABLE_KEY=your_supabase_publishable_key
 
 # Stellar
 VITE_STELLAR_NETWORK=TESTNET
@@ -318,14 +320,11 @@ VITE_HORIZON_URL=https://horizon-testnet.stellar.org
 VITE_SOROBAN_RPC_URL=https://soroban-testnet.stellar.org
 
 # Soroban Contract IDs
-VITE_SPLIT_CONTRACT_ID=
-VITE_VAULT_CONTRACT_ID=
+VITE_SPLIT_CONTRACT_ID=CCRH4EPUVIPESWYWOWPQ2QK3XN6KBR3RY6UFK36A4MXKKXIFH6ONRTVY
+VITE_VAULT_CONTRACT_ID=CC73UGT72A2MOZOSK6WFWMMIL32OJPJSPKEBFNBLK2GZJYNORERTSSWX
 VITE_ZK_VERIFIER_CONTRACT_ID=CAGUCQUMNSOJALPFM3A2T2TBDIDCFUDY3UQA6JIWAN4ZP3COPQ7HP7BU
-
-# ElevenLabs 
-ELEVENLABS_API_KEY=your_elevenlabs_api_key
-ELEVENLABS_VOICE_ID=your_voice_id
 ```
+
 ---
 
 ## Application Routes
