@@ -96,8 +96,8 @@ Contracts live under `contracts/` (`split_protocol`, `time_vault`) and `zk/contr
 | x402 split server + autonomous agent | ✅ Complete |
 | Blend yield integration | ✅ Complete (best-effort) |
 | ZK Proof-of-Vault (Groth16/BLS12-381) | ✅ Live on Testnet |
-| ZK Proof-of-Consistent-Saving (RISC Zero) | 🔜 Attestation pattern — on-chain BN254 verifier not yet built (see [note](./ARCHITECTURE.md#feature-2--proof-of-consistent-saving)) |
-| SEP-24 fiat on-ramp | 🔜 Post-hackathon |
+| ZK Proof-of-Consistent-Saving (RISC Zero) | ✅ Live on Testnet — on-chain BN254 verifier (see [note](./ARCHITECTURE.md#feature-2--proof-of-consistent-saving)) |
+| SEP-24 fiat on-ramp | 🧪 Client implemented, tested against Stellar's reference anchor — licensed anchor pending (see [note](./ARCHITECTURE.md#known-limitations--future-work)) |
 | Stellar Mainnet | 🔜 Post-hackathon |
 
 Full details and known limitations: [ARCHITECTURE.md → Known Limitations & Future Work](./ARCHITECTURE.md#known-limitations--future-work).

@@ -515,7 +515,7 @@ split_rules (
 |---|---|---|
 | Blend deposit | Best-effort | Falls back gracefully if testnet pool is unavailable; vault_2 held in Stellar account |
 | Secret key management | Simplified for demo | Production requires HSM or MPC wallet — never store raw secrets in `.env` |
-| SEP-24 fiat on-ramp | Pending | Anchor integration needed for direct fiat → USDC deposit flow |
+| SEP-24 fiat on-ramp | Client implemented, testnet-verified | `src/lib/stellar/sep24.ts` (SEP-1/10/24) + `useSep24Deposit` + `Sep24DepositModal` (in `WalletDisplay`). Tested end-to-end against Stellar's reference anchor (`testanchor.stellar.org`, shares Propulsor's USDC issuer). A **licensed** anchor for real fiat is a business/KYC decision, not a code change — swap `SEP24_HOME_DOMAIN` once one is chosen |
 | Stellar Mainnet | Pending | Contracts and agent are mainnet-ready; keypair + anchor coordination outstanding |
 | Blend withdrawal | Not implemented | Deposit-only for the demo scope; withdrawal follows the same `submit()` pattern |
 | ZK trusted setup | Dev-only ceremony | See [Trusted Setup Notice](#feature-1--proof-of-vault) above |

@@ -25,12 +25,12 @@ function formatEventLine(event: AgentActivityEvent): string {
         const parts = Object.entries(vb)
           .map(([k, v]) => `${k}: ${Number(v).toFixed(2)}`)
           .join(" · ");
-        return `Split ejecutado — ${parts}`;
+        return `Separación ejecutada — ${parts}`;
       }
-      return `Split ejecutado — ${amount}`;
+      return `Separación ejecutada — ${amount}`;
     }
     case "blend_deposit":
-      return `Blend deposit ✓ — txHash: ${event.blend_tx_hash?.slice(0, 8) ?? "..."}...`;
+      return `Rendimiento generado ✓ — comprobante: ${event.blend_tx_hash?.slice(0, 8) ?? "..."}...`;
     case "agent_error":
       return `Error: ${event.error_message ?? "desconocido"}`;
     default:
@@ -57,7 +57,7 @@ const AgentActivityFeed = () => {
           <div className="w-2 h-2 rounded-full bg-body-muted opacity-20" />
         </div>
         <span className="font-mono text-[0.6rem] text-dimmed ml-1 uppercase tracking-widest">
-          Agent Activity Feed
+          Actividad del agente
         </span>
       </div>
 

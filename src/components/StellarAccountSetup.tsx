@@ -14,7 +14,7 @@ interface Step {
 
 const StellarAccountSetup = ({ onComplete }: StellarAccountSetupProps) => {
   const [steps, setSteps] = useState<Step[]>([
-    { label: "Generando par de claves...", status: "pending" },
+    { label: "Creando tu cuenta...", status: "pending" },
     { label: "Activando cuenta en Stellar...", status: "pending" },
     { label: "Configurando bóvedas...", status: "pending" },
   ]);
@@ -51,7 +51,7 @@ const StellarAccountSetup = ({ onComplete }: StellarAccountSetupProps) => {
       // Step 3: Configure vaults (simulated)
       updateStep(2, { status: "active" });
       await new Promise((r) => setTimeout(r, 1200));
-      updateStep(2, { status: "done", detail: "✓ Contrato listo" });
+      updateStep(2, { status: "done", detail: "✓ Bóvedas listas" });
 
       setPhase("pin");
     };

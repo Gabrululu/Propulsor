@@ -51,8 +51,8 @@ const AgentTxRow = ({ event }: { event: AgentActivityEvent }) => (
       <span className="text-lg w-8 text-center">🤖</span>
       <div>
         <p className="text-sm text-foreground">
-          {event.event_type === "split_executed" && "Agent Split"}
-          {event.event_type === "blend_deposit" && "Blend Deposit"}
+          {event.event_type === "split_executed" && "Separación del agente"}
+          {event.event_type === "blend_deposit" && "Rendimiento generado"}
           {event.event_type === "payment_detected" && "Pago Detectado"}
           {event.event_type === "agent_error" && "Error"}
           {event.amount_usdc != null && (
@@ -65,7 +65,7 @@ const AgentTxRow = ({ event }: { event: AgentActivityEvent }) => (
               <button
                 onClick={() => navigator.clipboard.writeText(event.tx_hash!)}
                 className="text-xs text-dimmed font-mono hover:text-pink transition-colors"
-                title="Copiar hash"
+                title="Copiar código"
               >
                 {truncateAddress(event.tx_hash)}
               </button>
@@ -127,7 +127,7 @@ const Transacciones = () => {
       <div className="p-6 md:p-10 max-w-5xl pb-24 md:pb-10">
         <h1 className="text-2xl font-bold text-foreground mb-2">TRANSACCIONES</h1>
         <p className="text-body-muted text-xs font-mono mb-6">
-          {loading ? "Cargando..." : `${stellarTxs.length} on-chain · ${agentEvents.length} agent events`}
+          {loading ? "Cargando..." : `${stellarTxs.length} transacciones · ${agentEvents.length} eventos del agente`}
         </p>
 
         {/* Filter tabs */}

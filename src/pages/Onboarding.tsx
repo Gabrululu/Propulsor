@@ -91,7 +91,7 @@ const Onboarding = () => {
     setDeploying(true);
     setDeployError("");
     setTerminalLines([
-      { text: "Ejecutando en Soroban...", color: "pink" },
+      { text: "Creando tus bóvedas...", color: "pink" },
       { text: "Creando 3 bóvedas...", color: "default" },
       { text: `→ ${vaultNames[0]} (${percentages[0]}%)`, color: "pink" },
       { text: `→ ${vaultNames[1]} (${percentages[1]}%)`, color: "mint" },
@@ -116,8 +116,7 @@ const Onboarding = () => {
         if (error) console.error("Failed to save profile:", error.message);
       }
 
-      // Call set_rules on-chain
-      addLine("Desplegando reglas de split en el contrato...", "default");
+      addLine("Guardando tus reglas de reparto...", "default");
 
       const rules = percentages.map((pct, i) => ({ vault_id: i, percentage: pct }));
       const hash = await contracts.setRules(
@@ -128,7 +127,7 @@ const Onboarding = () => {
 
       setTxHash(hash);
       const shortHash = `${hash.slice(0, 8)}...${hash.slice(-4)}`;
-      addLine(`→ Tx: ${shortHash} ✓`, "mint");
+      addLine(`→ Comprobante: ${shortHash} ✓`, "mint");
 
       // Persist tx hash to Supabase for audit trail
       if (user) {
@@ -288,7 +287,7 @@ const Onboarding = () => {
             {isCustodial && (
               <div className="mt-6">
                 <label className="block text-xs font-mono text-muted-foreground uppercase tracking-widest mb-2">
-                  Confirma tu PIN para firmar en Stellar
+                  Confirma tu PIN para continuar
                 </label>
                 <input
                   type="password"
@@ -316,7 +315,7 @@ const Onboarding = () => {
         {/* Deploying / Success */}
         {deploying && (
           <div className="text-center">
-            <TerminalBlock title="soroban :: deploy" lines={terminalLines} />
+            <TerminalBlock title="propulsor :: creando tus bóvedas" lines={terminalLines} />
 
             {deployError && !deployDone && (
               <div className="mt-4">

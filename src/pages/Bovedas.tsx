@@ -129,7 +129,7 @@ const Bovedas = () => {
       );
       const usdcAmt = stroopsToUsdc(amount).toFixed(2);
       const shortHash = `${txHash.slice(0, 8)}...${txHash.slice(-4)}`;
-      toast({ title: `✓ Bóveda liberada · $${usdcAmt} USDC`, description: `Tx: ${shortHash}` });
+      toast({ title: `✓ Bóveda liberada · $${usdcAmt} USDC`, description: `Comprobante: ${shortHash}` });
       setReleaseModal(null);
       setReleasePin("");
       await loadVaults();
@@ -162,7 +162,7 @@ const Bovedas = () => {
         isCustodial ? lockPin : undefined
       );
       const shortHash = `${txHash.slice(0, 8)}...${txHash.slice(-4)}`;
-      toast({ title: "🔒 Bóveda bloqueada", description: `Tx: ${shortHash}` });
+      toast({ title: "🔒 Bóveda bloqueada", description: `Comprobante: ${shortHash}` });
       setLockModal(null);
       setLockPin("");
       setLockDate("");
@@ -191,7 +191,7 @@ const Bovedas = () => {
         isCustodial ? addPin : undefined
       );
       const shortHash = `${txHash.slice(0, 8)}...${txHash.slice(-4)}`;
-      toast({ title: `✓ $${usdc.toFixed(2)} agregados`, description: `Tx: ${shortHash}` });
+      toast({ title: `✓ $${usdc.toFixed(2)} agregados`, description: `Comprobante: ${shortHash}` });
       setAddModal(null);
       setAddAmount("");
       setAddPin("");
@@ -290,7 +290,7 @@ const Bovedas = () => {
                 </div>
               </>
             ) : (
-              <p className="font-mono text-xs text-pink animate-pulse py-4">Liberando bóveda en Soroban...</p>
+              <p className="font-mono text-xs text-pink animate-pulse py-4">Liberando bóveda...</p>
             )}
           </div>
         </div>
@@ -363,7 +363,7 @@ const Bovedas = () => {
                 </div>
               </>
             ) : (
-              <p className="font-mono text-xs text-pink animate-pulse py-4">Bloqueando bóveda en Soroban...</p>
+              <p className="font-mono text-xs text-pink animate-pulse py-4">Bloqueando bóveda...</p>
             )}
           </div>
         </div>
@@ -426,7 +426,7 @@ const Bovedas = () => {
                 </div>
               </>
             ) : (
-              <p className="font-mono text-xs text-pink animate-pulse py-4">Agregando fondos en Soroban...</p>
+              <p className="font-mono text-xs text-pink animate-pulse py-4">Agregando fondos...</p>
             )}
           </div>
         </div>

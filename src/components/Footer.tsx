@@ -16,9 +16,9 @@ const Footer = () => {
           <span className="font-mono text-xs text-body-muted uppercase tracking-widest">{t.footer.techHeading}</span>
           <div className="mt-3 space-y-1">
             <p className="text-dimmed text-xs font-mono">Stellar Network</p>
-            <p className="text-dimmed text-xs font-mono">Soroban Smart Contracts</p>
-            <p className="text-dimmed text-xs font-mono">SEP-24 Anchors</p>
-            <p className="text-dimmed text-xs font-mono">USDC Stablecoin</p>
+            <p className="text-dimmed text-xs font-mono">Contratos automáticos</p>
+            <p className="text-dimmed text-xs font-mono">Depósitos instantáneos</p>
+            <p className="text-dimmed text-xs font-mono">Dólar digital (USDC)</p>
           </div>
         </div>
         <div>

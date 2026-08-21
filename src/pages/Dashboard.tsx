@@ -21,10 +21,10 @@ import type { AgentSplitResult } from "@/lib/agent/client";
 
 // Terminal progress messages shown while a split is executing
 const SPLIT_STEPS = [
-  "Simulando transacción en Soroban...",
+  "Preparando la operación...",
   "Firmando con tu clave...",
-  "Enviando a Stellar Testnet...",
-  "Confirmando en el ledger...",
+  "Enviando a Stellar...",
+  "Confirmando...",
 ];
 
 const VAULT_META = [
@@ -209,7 +209,7 @@ const Dashboard = () => {
         controller.signal
       );
       setAgentResult(result);
-      toast({ title: "🤖 Split ejecutado vía agente", description: `Tx: ${result.txHash.slice(0, 8)}...` });
+      toast({ title: "🤖 Separación ejecutada por el agente", description: `Comprobante: ${result.txHash.slice(0, 8)}...` });
       loadBalances();
     } catch (err) {
       const isTimeout = err instanceof DOMException && err.name === "AbortError";
@@ -259,7 +259,7 @@ const Dashboard = () => {
         ...prev.slice(0, 4),
       ]);
 
-      toast({ title: "✓ Split ejecutado", description: `Tx: ${shortHash}` });
+      toast({ title: "✓ Separación ejecutada", description: `Comprobante: ${shortHash}` });
       setShowSplitModal(false);
       setSplitAmount("");
       setSplitPin("");
@@ -330,7 +330,7 @@ const Dashboard = () => {
         {agentOnline && (
           <div className="bg-card-dark border border-pink-subtle rounded-sm p-5 mb-8">
             <h3 className="font-mono text-xs uppercase tracking-widest text-body-muted mb-4">
-              ⚡ Disparar split vía agente
+              ⚡ Activar separación con el agente
             </h3>
             <div className="flex gap-3">
               <input
@@ -359,17 +359,17 @@ const Dashboard = () => {
             {agentResult && (
               <div className="mt-4 p-3 bg-deep rounded-sm border border-mint/20">
                 <p className="font-mono text-xs text-mint mb-2">
-                  ✓ Split confirmado · {agentResult.txHash.slice(0, 8)}...{agentResult.txHash.slice(-6)}
+                  ✓ Separación confirmada · {agentResult.txHash.slice(0, 8)}...{agentResult.txHash.slice(-6)}
                 </p>
                 <div className="flex gap-4 flex-wrap">
                   {agentResult.vaultBreakdown.map((v) => (
                     <span key={v.vaultId} className="font-mono text-xs text-foreground">
-                      vault_{v.vaultId}:{" "}
+                      {VAULT_META[v.vaultId]?.name ?? `Bóveda ${v.vaultId + 1}`}:{" "}
                       <span className="text-mint">
                         ${(Number(v.balance) / 10_000_000).toFixed(2)}
                       </span>
                       {v.vaultId === 2 && (
-                        <span className="text-[0.6rem] text-mint ml-1">→ Blend</span>
+                        <span className="text-[0.6rem] text-mint ml-1">→ rendimiento extra</span>
                       )}
                     </span>
                   ))}
@@ -434,7 +434,7 @@ const Dashboard = () => {
                   <div className="flex items-center gap-1 mt-2">
                     <span className="text-[0.6rem]">💰</span>
                     <span className="font-mono text-[0.55rem] text-mint uppercase tracking-wider">
-                      Blend · yield automático
+                      Rendimiento automático
                     </span>
                   </div>
                 )}
@@ -464,7 +464,7 @@ const Dashboard = () => {
           <div className="bg-card-dark border border-pink-subtle rounded-sm w-full max-w-md p-6">
             <h3 className="font-bold text-foreground mb-1">Separar ingreso</h3>
             <p className="text-body-muted text-xs font-mono mb-5">
-              El contrato distribuirá el monto según tus reglas de split.
+              El monto se repartirá automáticamente entre tus bóvedas, según tus porcentajes.
             </p>
 
             {!splitting ? (

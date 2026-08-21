@@ -126,14 +126,14 @@ const Configuracion = () => {
 
         {/* Wallet section */}
         <section className="bg-card-dark border border-pink-subtle rounded-sm p-6 mb-6">
-          <h2 className="text-sm font-bold text-foreground uppercase tracking-wider mb-4">Wallet Stellar</h2>
-          
+          <h2 className="text-sm font-bold text-foreground uppercase tracking-wider mb-4">Tu cuenta Stellar</h2>
+
           <div className="space-y-3">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-mono text-muted-foreground">Modo</span>
+              <span className="text-xs font-mono text-muted-foreground">Tipo</span>
               <span className="text-sm text-foreground">
-                {mode === "custodial" && "🔐 Custodial (PIN)"}
-                {mode === "custodial_social" && "🌐 Custodial (Social)"}
+                {mode === "custodial" && "🔐 Cuenta Propulsor (PIN)"}
+                {mode === "custodial_social" && "🌐 Cuenta Propulsor (Social)"}
                 {mode === "external" && "💎 Wallet externa"}
                 {!mode && "No conectado"}
               </span>

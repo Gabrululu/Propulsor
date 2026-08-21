@@ -1,4 +1,4 @@
-export { getHorizonServer, getSorobanServer, NETWORK_PASSPHRASE, HORIZON_URL, SOROBAN_RPC_URL, STELLAR_EXPLORER_BASE, isSimulationMode, SPLIT_CONTRACT_ID, VAULT_CONTRACT_ID } from "./client";
+export { getHorizonServer, getSorobanServer, NETWORK_PASSPHRASE, HORIZON_URL, SOROBAN_RPC_URL, STELLAR_EXPLORER_BASE, SEP24_HOME_DOMAIN, isSimulationMode, SPLIT_CONTRACT_ID, VAULT_CONTRACT_ID } from "./client";
 export { generateKeypair, fundTestnetAccount, getAccountBalance, encryptSecretKey, decryptSecretKey, truncateAddress } from "./wallet";
 export type { AccountBalances } from "./wallet";
 export { executeSplit, lockVault, getBalances } from "./contracts";
@@ -8,3 +8,5 @@ export type { WalletId, WalletModule } from "./wallets-kit";
 export { createCustodialAccount, signCustodial, loadEncryptedSecret, verifyPin } from "./custody";
 export { WalletProvider, useWallet } from "./WalletContext";
 export type { WalletMode } from "./WalletContext";
+export { discoverAnchor, sep10Authenticate, getSep24Info, initiateSep24Deposit, getSep24Transaction } from "./sep24";
+export type { AnchorInfo, Sep24AssetInfo, Sep24DepositSession, Sep24Transaction, Sep24TransactionStatus } from "./sep24";

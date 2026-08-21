@@ -41,9 +41,9 @@ const ConnectModal = ({ embedded = false, onConnected }: ConnectModalProps) => {
   const [walletError, setWalletError] = useState("");
 
   const [steps, setSteps] = useState<Step[]>([
-    { label: "Generando par de claves criptográficas...", status: "pending" },
-    { label: "Activando cuenta en la red Stellar...", status: "pending" },
-    { label: "Cifrando clave con tu PIN...", status: "pending" },
+    { label: "Creando tu cuenta...", status: "pending" },
+    { label: "Activando tu cuenta en Stellar...", status: "pending" },
+    { label: "Protegiendo tu cuenta con tu PIN...", status: "pending" },
     { label: "Guardando en tu perfil...", status: "pending" },
   ]);
   const [publicKey, setPublicKey] = useState("");
@@ -85,7 +85,7 @@ const ConnectModal = ({ embedded = false, onConnected }: ConnectModalProps) => {
       // Step 1-3 are handled inside connectCustodial
       updateStep(0, { status: "active" });
       await new Promise((r) => setTimeout(r, 400));
-      updateStep(0, { status: "done", detail: "✓ Par de claves generado" });
+      updateStep(0, { status: "done", detail: "✓ Cuenta creada" });
 
       updateStep(1, { status: "active" });
       await new Promise((r) => setTimeout(r, 400));
@@ -93,7 +93,7 @@ const ConnectModal = ({ embedded = false, onConnected }: ConnectModalProps) => {
 
       updateStep(2, { status: "active" });
       await new Promise((r) => setTimeout(r, 300));
-      updateStep(2, { status: "done", detail: "✓ Clave protegida con AES-256" });
+      updateStep(2, { status: "done", detail: "✓ Cuenta protegida" });
 
       updateStep(3, { status: "active" });
       // This creates keypair, funds, encrypts, and saves to Supabase
@@ -278,8 +278,7 @@ const ConnectModal = ({ embedded = false, onConnected }: ConnectModalProps) => {
         {(section === "custodial-creating" || section === "custodial-done") && (
           <div>
             <div className="bg-muted rounded-sm p-4 font-mono text-[0.72rem] leading-8 space-y-1">
-              <p className="text-muted-foreground text-[0.6rem]">// Propulsor · Creando tu cuenta Stellar</p>
-              <p className="text-muted-foreground text-[0.6rem] mb-3">// Red: Testnet</p>
+              <p className="text-muted-foreground text-[0.6rem]">// Propulsor · Creando tu cuenta</p>
               {steps.map((step, i) => (
                 <div key={i} className="flex items-start justify-between gap-2">
                   <span className="flex items-center gap-2">

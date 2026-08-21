@@ -3,7 +3,7 @@ import { useNetworkStatus, type NetworkState } from "@/hooks/useNetworkStatus";
 const statusConfig: Record<NetworkState, { dot: string; label: string; borderClass: string }> = {
   connected: {
     dot: "bg-[#b8f0c8]",
-    label: "STELLAR TESTNET",
+    label: "RED DE PRUEBAS",
     borderClass: "border-mint-visible",
   },
   reconnecting: {

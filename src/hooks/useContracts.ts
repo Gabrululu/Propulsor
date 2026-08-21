@@ -9,11 +9,8 @@
  *   const { getBalances, executeSplit, lockVault, releaseVault } = useContracts();
  */
 
-import { useCallback } from "react";
-import { useWallet } from "@/lib/stellar/WalletContext";
-import { useAuth } from "./useAuth";
-import { loadEncryptedSecret, signCustodial } from "@/lib/stellar/custody";
-import type { SignFn, ProgressFn, SplitRule } from "@/lib/stellar/contracts";
+import { useSigner } from "./useSigner";
+import type { ProgressFn, SplitRule } from "@/lib/stellar/contracts";
 import {
   setRules,
   executeSplit,
@@ -28,36 +25,7 @@ import {
 } from "@/lib/stellar/contracts";
 
 export function useContracts() {
-  const { publicKey, mode, signTransaction } = useWallet();
-  const { user } = useAuth();
-
-  /**
-   * Build a SignFn for the current wallet mode.
-   * For custodial wallets a PIN is required; for external wallets the wallet
-   * extension handles signing and no PIN is needed.
-   */
-  const makeSign = useCallback(
-    (pin?: string): SignFn =>
-      async (txXdr: string) => {
-        if (mode === "custodial") {
-          if (!pin) throw new Error("PIN requerido para firmar");
-          if (!user?.id) throw new Error("Sesión no encontrada");
-          const enc = await loadEncryptedSecret(user.id);
-          if (!enc) throw new Error("No se encontró la clave cifrada");
-          return signCustodial(txXdr, enc, pin);
-        }
-        if (mode === "custodial_social") {
-          if (!user?.id) throw new Error("Sesión no encontrada");
-          const enc = await loadEncryptedSecret(user.id);
-          if (!enc) throw new Error("No se encontró la clave cifrada");
-          // Social accounts use userId as the encryption passphrase (no PIN)
-          return signCustodial(txXdr, enc, user.id);
-        }
-        // External wallet (Freighter, xBull …)
-        return signTransaction(txXdr);
-      },
-    [mode, user, signTransaction]
-  );
+  const { publicKey, makeSign } = useSigner();
 
   return {
     publicKey,

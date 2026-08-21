@@ -57,20 +57,19 @@ const Simulate = () => {
 
   const feeDisplay = fees.loading
     ? `$0.00001 USD (${t.simulate.feeLoading})`
-    : `$${fees.feeUSD.toFixed(6)} USD (${fees.baseFeeStroops} stroops)`;
+    : `$${fees.feeUSD.toFixed(6)} USD`;
 
   const terminalLines = [
-    { text: "// propulsor::simulate", color: "dimmed" as const },
-    { text: `input: ${pen.toFixed(2)} PEN`, color: "default" as const },
-    { text: `convert: ${pen.toFixed(2)} / ${RATE} = ${usdc.toFixed(2)} USDC`, color: "pink" as const },
+    { text: `Monto ingresado: S/${pen.toFixed(2)}`, color: "default" as const },
+    { text: `Convertido: $${usdc.toFixed(2)} USDC`, color: "pink" as const },
     { text: "", color: "default" as const },
     ...vaultNames.map((name, i) => ({
-      text: `vault::${name.toLowerCase().replace(" ", "_")} → $${splits[i].toFixed(2)} USDC (${percentages[i]}%)${locks[i] ? " 🔒" : ""}`,
+      text: `${name}: $${splits[i].toFixed(2)} USDC (${percentages[i]}%)${locks[i] ? " 🔒" : ""}`,
       color: (i === 1 ? "mint" : "pink") as "mint" | "pink",
     })),
     { text: "", color: "default" as const },
     { text: `${t.simulate.feeEstimateLine} ${feeDisplay}`, color: "mint" as const },
-    { text: `→ Tx: GBSIMULADOR...XF9A ✓`, color: "mint" as const },
+    { text: `→ Comprobante: GBSIMULADOR...XF9A ✓`, color: "mint" as const },
   ];
 
   return (

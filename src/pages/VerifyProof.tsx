@@ -164,18 +164,18 @@ const VerifyProof = () => {
           </Link>
           <h1 className="text-2xl font-bold mt-3">
             <span className="text-foreground">VERIFICAR </span>
-            <span className="text-primary">PRUEBA ZK</span>
+            <span className="text-primary">PRUEBA</span>
           </h1>
           <p className="text-xs text-muted-foreground mt-1">
             Verificación pública · Sin autenticación requerida
           </p>
         </div>
 
-        {/* Proof hash display */}
+        {/* Proof code display */}
         {proofHash && (
           <div className="bg-muted rounded-sm px-3 py-2">
             <p className="text-[0.6rem] text-muted-foreground font-mono uppercase tracking-wider mb-1">
-              Hash de la prueba
+              Código de la prueba
             </p>
             <p className="font-mono text-xs text-foreground break-all">{proofHash}</p>
           </div>
@@ -186,7 +186,7 @@ const VerifyProof = () => {
           <div className="flex items-center gap-3 p-4 bg-card rounded-sm border border-border">
             <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin shrink-0" />
             <span className="text-sm font-mono text-muted-foreground">
-              Consultando contrato en Stellar...
+              Consultando en Stellar...
             </span>
           </div>
         )}
@@ -199,7 +199,7 @@ const VerifyProof = () => {
                 <div>
                   <p className="font-bold text-foreground">Prueba válida</p>
                   <p className="text-xs text-muted-foreground mt-0.5">
-                    Verificada on-chain en Stellar Testnet
+                    Verificada en Stellar
                   </p>
                 </div>
               </div>
@@ -228,16 +228,16 @@ const VerifyProof = () => {
                 <span className="text-foreground">{state.record.ledgerDate ?? "..."}</span>
               </div>
               <div className="flex justify-between gap-2">
-                <span className="text-muted-foreground">Ledger</span>
+                <span className="text-muted-foreground">N° de registro</span>
                 <span className="text-foreground">#{state.record.ledger.toLocaleString()}</span>
               </div>
             </div>
 
             <div className="p-3 bg-muted rounded-sm">
               <p className="text-[0.65rem] text-muted-foreground font-mono leading-relaxed">
-                Esta prueba criptográfica garantiza que la cuenta indicada tenía un balance
-                de vault_2 ≥ {formatThreshold(state.record.threshold_usdc)} en el ledger #{state.record.ledger.toLocaleString()}.
-                El balance exacto nunca fue revelado (Groth16 / BLS12-381).
+                Esta prueba garantiza que la cuenta indicada tenía ahorrado al menos
+                {" "}{formatThreshold(state.record.threshold_usdc)} en su bóveda "Meta grande" el {state.record.ledgerDate ?? "día registrado"}.
+                El balance exacto nunca fue revelado.
               </p>
             </div>
           </div>
@@ -251,13 +251,13 @@ const VerifyProof = () => {
                 <div>
                   <p className="font-bold text-foreground">Prueba no encontrada</p>
                   <p className="text-xs text-muted-foreground mt-0.5">
-                    El hash no corresponde a ninguna prueba verificada en este contrato.
+                    El código no corresponde a ninguna prueba verificada.
                   </p>
                 </div>
               </div>
             </div>
             <p className="text-xs text-muted-foreground font-mono">
-              Posibles causas: hash incorrecto, prueba expirada (TTL), o contrato incorrecto.
+              Posibles causas: código incorrecto, la prueba expiró, o hubo un error de conexión.
             </p>
           </div>
         )}
@@ -268,13 +268,11 @@ const VerifyProof = () => {
           </div>
         )}
 
-        {/* ZK explanation */}
+        {/* Explanation */}
         <div className="pt-2 border-t border-border">
           <p className="text-[0.6rem] text-muted-foreground font-mono leading-relaxed">
-            Verificado con <span className="text-foreground">Groth16 / BLS12-381</span> (Soroban Protocol 22).
-            El contrato ProofOfVaultVerifier realiza el pairing check
-            <span className="text-foreground"> e(-A,B)·e(α,β)·e(vk_x,γ)·e(C,δ) = 1</span>
-            enteramente on-chain. Código abierto en el repositorio de Propulsor.
+            No es una promesa, es matemática: esta prueba se verifica sola, directamente en Stellar,
+            y nadie puede inventarla. Código abierto en el repositorio de Propulsor.
           </p>
         </div>
       </div>

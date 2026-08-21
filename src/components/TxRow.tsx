@@ -33,7 +33,7 @@ const TxRow = ({ type, description, amount, vault, txHash, timestamp, status }: 
               <button
                 onClick={() => navigator.clipboard.writeText(txHash!)}
                 className="text-xs text-dimmed font-mono hover:text-pink transition-colors"
-                title="Copiar hash"
+                title="Copiar código"
               >
                 {truncatedHash}
               </button>

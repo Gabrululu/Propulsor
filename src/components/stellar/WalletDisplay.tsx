@@ -1,6 +1,7 @@
 import { useWallet } from "@/lib/stellar/WalletContext";
 import { truncateAddress } from "@/lib/stellar/wallet";
 import { STELLAR_EXPLORER_BASE } from "@/lib/stellar/client";
+import Sep24DepositModal from "./Sep24DepositModal";
 import { useState } from "react";
 
 const WalletDisplay = () => {
@@ -41,6 +42,8 @@ const WalletDisplay = () => {
       <p className="font-mono text-[0.55rem] text-dimmed">
         {isCustodial ? "Protegida con PIN" : walletId ?? "External wallet"}
       </p>
+
+      <Sep24DepositModal />
 
       <div className="flex items-center justify-between">
         <a

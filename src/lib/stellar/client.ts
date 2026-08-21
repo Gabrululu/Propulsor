@@ -9,6 +9,14 @@ export const NETWORK_PASSPHRASE = "Test SDF Network ; September 2015";
 export const USDC_ASSET_CODE = "USDC";
 export const USDC_ISSUER = "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5";
 
+// SEP-24 fiat on-ramp anchor. This is Stellar Development Foundation's public
+// reference anchor for testing the SEP-24 interactive deposit/withdraw flow —
+// its USDC happens to share Propulsor's own testnet USDC issuer above, so a
+// completed deposit lands as spendable balance in the app immediately. Swap
+// for a licensed anchor's home domain (KYC/banking coordination required)
+// before using this in production.
+export const SEP24_HOME_DOMAIN = "testanchor.stellar.org";
+
 // Contract IDs — Soroban Testnet deployments
 // Fallback to env vars for local override, but default to deployed contract IDs
 export const SPLIT_CONTRACT_ID =

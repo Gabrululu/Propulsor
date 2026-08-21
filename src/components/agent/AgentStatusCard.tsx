@@ -5,10 +5,10 @@ import { truncateAddress } from "@/lib/stellar";
 // Flow steps shown inside the card
 const FLOW_STEPS = [
   { icon: "💸", label: "Remesa" },
-  { icon: "👁", label: "Horizon" },
-  { icon: "⚡", label: "x402" },
-  { icon: "📊", label: "Split" },
-  { icon: "💰", label: "Blend" },
+  { icon: "👁", label: "Vigilancia" },
+  { icon: "⚡", label: "Pago" },
+  { icon: "📊", label: "Reparto" },
+  { icon: "💰", label: "Rendimiento" },
 ];
 
 function timeAgo(iso: string | null | undefined): string {
@@ -64,25 +64,25 @@ const AgentStatusCard = () => {
       {/* ── Description ──────────────────────────────────────── */}
       <p className="text-body-muted text-xs font-mono mb-4 leading-relaxed">
         {isActive
-          ? "Tu dinero está protegido en el momento en que llega. El agente detecta cada remesa y ejecuta el split antes de que llegue cualquier presión externa."
+          ? "Tu dinero está protegido en el momento en que llega. El agente detecta cada remesa y hace el reparto antes de que llegue cualquier presión externa."
           : isConfigured
-          ? "El servidor del agente no responde. Inicia el agente con npm run dev en la carpeta /agent para habilitar los splits automáticos."
-          : "El agente autónomo no está configurado. Inicia el servidor en /agent y añade VITE_AGENT_SERVER_URL al .env del frontend."}
+          ? "El agente automático no está disponible en este momento. El reparto automático está temporalmente deshabilitado."
+          : "El agente automático todavía no está activado para tu cuenta."}
       </p>
 
       {/* ── Stats row (from agent_status) ────────────────────── */}
       {status && (
         <div className="grid grid-cols-3 gap-3 mb-4">
           <div className="bg-deep rounded-sm p-2.5 border border-pink-subtle">
-            <span className="font-mono text-[0.55rem] text-body-muted uppercase tracking-wider block mb-0.5">Splits</span>
+            <span className="font-mono text-[0.55rem] text-body-muted uppercase tracking-wider block mb-0.5">Repartos</span>
             <span className="font-mono text-sm text-foreground font-bold">{status.total_splits}</span>
           </div>
           <div className="bg-deep rounded-sm p-2.5 border border-pink-subtle">
-            <span className="font-mono text-[0.55rem] text-body-muted uppercase tracking-wider block mb-0.5">Último split</span>
+            <span className="font-mono text-[0.55rem] text-body-muted uppercase tracking-wider block mb-0.5">Último reparto</span>
             <span className="font-mono text-sm text-foreground">{timeAgo(status.last_split_at)}</span>
           </div>
           <div className="bg-deep rounded-sm p-2.5 border border-pink-subtle">
-            <span className="font-mono text-[0.55rem] text-mint uppercase tracking-wider block mb-0.5">Blend yield</span>
+            <span className="font-mono text-[0.55rem] text-mint uppercase tracking-wider block mb-0.5">Rendimiento generado</span>
             <span className="font-mono text-sm text-mint font-bold">${Number(status.total_yield_usdc).toFixed(2)}</span>
           </div>
         </div>
@@ -151,16 +151,8 @@ const AgentStatusCard = () => {
             </>
           )}
           <span className="font-mono text-[0.6rem] text-body-muted ml-auto">
-            Stellar Testnet
+            Red de pruebas
           </span>
-        </div>
-      )}
-
-      {!isActive && !loading && (
-        <div className="mt-3 pt-3 border-t border-pink-subtle">
-          <code className="font-mono text-[0.6rem] text-dimmed">
-            cd agent &amp;&amp; npm run dev &amp;&amp; npm run monitor
-          </code>
         </div>
       )}
     </div>

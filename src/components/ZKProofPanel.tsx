@@ -91,9 +91,9 @@ const ZKProofPanel = () => {
 
   const stepMsg = (s: ProofState): string => {
     switch (s.status) {
-      case "fetching-balance": return "Leyendo balance de vault_2...";
-      case "generating":       return "Generando prueba ZK en tu dispositivo...";
-      case "submitting":       return "Enviando prueba a Stellar Testnet...";
+      case "fetching-balance": return "Leyendo tu bóveda \"Meta grande\"...";
+      case "generating":       return "Generando prueba privada en tu dispositivo...";
+      case "submitting":       return "Enviando prueba a Stellar...";
       default: return "";
     }
   };
@@ -118,7 +118,7 @@ const ZKProofPanel = () => {
       if (balanceStroops < thresholdStroops) {
         setState({
           status: "error",
-          message: `Balance de vault_2 ($${(Number(balanceStroops) / 1e7).toFixed(2)} USDC) es menor al umbral ($${thresholdUsdc} USDC). No se puede generar la prueba.`,
+          message: `El balance de tu bóveda "Meta grande" ($${(Number(balanceStroops) / 1e7).toFixed(2)} USDC) es menor al monto elegido ($${thresholdUsdc} USDC). No se puede generar la prueba.`,
         });
         return;
       }
@@ -241,14 +241,14 @@ const ZKProofPanel = () => {
       {/* Header */}
       <div>
         <span className="font-mono text-[0.65rem] uppercase tracking-widest text-primary">
-          → PRUEBA ZK · PRIVACIDAD
+          → PRUEBA PRIVADA
         </span>
         <h3 className="text-lg font-bold text-foreground mt-1">
-          Proof of Vault
+          Prueba de ahorro privada
         </h3>
         <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
-          Demuestra que tu vault de ahorro supera un umbral <span className="text-foreground font-semibold">sin revelar el balance exacto</span>.
-          La prueba se genera en tu dispositivo con Groth16/BLS12-381 y se verifica on-chain en Stellar.
+          Demuestra que tienes ahorrado más de un monto <span className="text-foreground font-semibold">sin revelar cuánto tienes exactamente</span>.
+          La prueba se genera en tu dispositivo y se verifica de forma pública en Stellar.
         </p>
       </div>
 
@@ -257,7 +257,7 @@ const ZKProofPanel = () => {
         <div className="space-y-3">
           <div>
             <label className="text-xs text-muted-foreground font-mono uppercase tracking-wider mb-1 block">
-              Umbral mínimo (USDC)
+              Monto mínimo a demostrar (USDC)
             </label>
             <div className="flex items-center gap-2">
               <span className="text-muted-foreground font-mono text-sm">$</span>
@@ -273,7 +273,7 @@ const ZKProofPanel = () => {
               <span className="text-muted-foreground font-mono text-xs">USDC</span>
             </div>
             <p className="text-[0.6rem] text-muted-foreground mt-1">
-              Probarás que tienes al menos ${thresholdInput} USDC en vault_2
+              Probarás que tienes al menos ${thresholdInput} USDC en tu bóveda "Meta grande"
             </p>
           </div>
 
@@ -301,17 +301,17 @@ const ZKProofPanel = () => {
           </div>
           <div className="bg-muted rounded-sm p-3 font-mono text-[0.65rem] text-muted-foreground leading-6 space-y-1">
             <p className={state.status !== "idle" ? "text-secondary" : "opacity-40"}>
-              {state.status === "fetching-balance" ? "▸" : "✓"} Leyendo balance de vault_2...
+              {state.status === "fetching-balance" ? "▸" : "✓"} Leyendo tu bóveda de ahorro...
             </p>
             <p className={
               state.status === "generating" ? "text-secondary" :
               state.status === "submitting" ? "text-primary" :
               "opacity-40"
             }>
-              {state.status === "generating" ? "▸" : state.status === "submitting" ? "✓" : "○"} Generando prueba off-chain (WASM)...
+              {state.status === "generating" ? "▸" : state.status === "submitting" ? "✓" : "○"} Generando prueba privada en tu dispositivo...
             </p>
             <p className={state.status === "submitting" ? "text-secondary" : "opacity-40"}>
-              {state.status === "submitting" ? "▸" : "○"} Verificando on-chain en Stellar...
+              {state.status === "submitting" ? "▸" : "○"} Verificando en Stellar...
             </p>
           </div>
           {state.status === "generating" && (
@@ -327,23 +327,23 @@ const ZKProofPanel = () => {
         <div className="space-y-3">
           <div className="text-center">
             <p className="text-secondary font-mono text-sm">
-              ✓ Prueba verificada on-chain
+              ✓ Prueba verificada
             </p>
           </div>
 
           <div className="bg-muted rounded-sm p-4 space-y-2 font-mono text-xs">
             <div className="flex justify-between gap-2">
-              <span className="text-muted-foreground">Umbral probado</span>
+              <span className="text-muted-foreground">Monto probado</span>
               <span className="text-foreground font-semibold">${state.thresholdUsdc} USDC</span>
             </div>
             <div className="flex justify-between gap-2">
-              <span className="text-muted-foreground">Proof hash</span>
+              <span className="text-muted-foreground">Código de verificación</span>
               <span className="text-primary truncate max-w-[140px]" title={state.proofHash}>
                 {state.proofHash.slice(0, 8)}...{state.proofHash.slice(-8)}
               </span>
             </div>
             <div className="flex justify-between gap-2">
-              <span className="text-muted-foreground">Stellar tx</span>
+              <span className="text-muted-foreground">Comprobante</span>
               <a
                 href={`${STELLAR_EXPLORER_BASE}/tx/${state.txHash}`}
                 target="_blank"

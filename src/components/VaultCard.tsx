@@ -89,7 +89,7 @@ const VaultCard = ({
         <div className="flex items-center gap-1.5 mb-3 py-1.5 px-2 rounded-sm border border-mint/20 bg-mint/5 w-fit">
           <span className="text-xs">💰</span>
           <span className="font-mono text-[0.65rem] text-mint uppercase tracking-wider">
-            Blend · yield automático
+            Rendimiento automático
           </span>
         </div>
       )}
