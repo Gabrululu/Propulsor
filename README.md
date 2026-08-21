@@ -1,259 +1,29 @@
 # Propulsor 💜
 
-> **Your first tool for financial independence.**  
+> **Your first tool for financial independence.**
 > The money you receive — automatically split and protected. No bank, no fees, no one else can touch it.
 
 ---
 
 ## What is Propulsor?
 
-Propulsor is a programmable financial management platform for the informal economy across Latin America. Using Smart Contracts on the **Stellar (Soroban)** network, every income is automatically split into three protected vaults based on user-defined rules — no bank account required, no abusive fees, with real protection against external pressures.
+Propulsor is a programmable financial management platform for the informal economy across Latin America. Using smart contracts on the **Stellar (Soroban)** network, every income is automatically split into protected vaults based on user-defined rules — no bank account required, no abusive fees, with real protection against external social and financial pressures.
 
-**The problem:** 70% of informal economy workers in Latin America lack access to formal financial products (IDB, 2024). Peru receives $800M+ in annual remittances — most reaches households with no formal savings tools and disappears within days. Not due to irresponsibility: due to lack of tools.
+**The problem:** 70% of informal economy workers in Latin America lack access to formal financial products (IDB, 2024). Peru alone receives $800M+ in annual remittances — most reaches households with no formal savings tools and disappears within days. Not due to irresponsibility: due to lack of tools.
 
 **The solution:** A smart contract that separates money before pressure arrives.
 
 ---
 
-## 🤖 Agentic Payments Layer *(Stellar Hackathon)*
-
-Propulsor now includes a fully autonomous payments agent built on the **x402 protocol**. When a remittance arrives at any hour of the day, the agent detects it via Horizon streaming, pays its own 0.01 USDC fee to trigger the x402-protected split endpoint, and executes the on-chain distribution — all without any user interaction. The savings vault (vault_2) is then automatically deposited into **Blend Protocol** to start earning yield immediately, before social or family pressure has any chance to redirect the funds.
-
----
-
-## 🏗️ Architecture *(Updated)*
-
-```
-Remittance arrives (USDC on Stellar Testnet)
-         │
-         ▼
-  Horizon Streaming ──► Agent Monitor (monitor.ts)
-                                  │
-                          x402 Payment Flow
-                          (agent self-pays 0.01 USDC fee)
-                                  │
-                                  ▼
-                        POST /execute-split  (server.ts)
-                                  │
-                                  ▼
-                      SplitProtocol Contract (Soroban)
-                      ├── vault_0: spending    60%
-                      ├── vault_1: emergency   30%
-                      └── vault_2: savings     10%
-                                                │
-                                                ▼
-                                     Blend Protocol (blend.ts)
-                                     └── deposit → bTokens → yield
-```
-
-**Original flow** (React frontend) remains unchanged — users can still trigger splits manually and manage vaults through the UI.
-
----
-
-## ⚡ Agent Setup & Running
-
-### Prerequisites
-
-- Node.js ≥ 22
-- A funded Stellar Testnet keypair with a USDC trustline (see steps below)
-
-### Step 1 — Generate a keypair
-
-Open [Stellar Lab → Keypair Generator](https://lab.stellar.org/keypair-generator) and click **Generate Keypair**. Save the **Secret Key** (starts with `S`) and the **Public Key** (starts with `G`).
-
-### Step 2 — Fund with Testnet XLM
-
-Go to [Stellar Lab → Create Account](https://lab.stellar.org/account/create), enter your Public Key, and click **Create Account** (uses Friendbot — gives 10,000 XLM).
-
-### Step 3 — Add a USDC trustline
-
-1. Open [Stellar Lab → Build Transaction](https://lab.stellar.org/transaction/build)
-2. Source Account: your Public Key
-3. Add operation → **Change Trust**
-4. Asset Code: `USDC` — Issuer: `GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5`
-5. Sign with your Secret Key and submit
-
-Then get testnet USDC from the [Circle Testnet Faucet](https://faucet.circle.com/).
-
-### Step 4 — Configure environment variables
-
-```bash
-cd agent
-cp .env.example .env   # or create .env manually
-```
-
-Minimum required variables:
-
-```env
-SERVER_STELLAR_SECRET=S...   # keypair from Step 1 (server + agent)
-WATCHED_ACCOUNT=G...         # Stellar address to watch for USDC payments
-
-# Optional — enables automatic Blend yield on vault_2
-VAULT2_PUBLIC_KEY=G...
-VAULT2_SECRET=S...
-BLEND_POOL_ID=C...           # get from testnet.blend.capital
-```
-
-See [`agent/README.md`](./agent/README.md) for the full variable reference and Blend setup instructions.
-
-### Step 5 — Install & run
-
-```bash
-cd agent
-npm install
-
-# One-time: register split rules on-chain (60/30/10)
-npm run setup
-```
-
-Then in two terminals:
-
-```bash
-# Terminal 1 — x402-protected split server
-npm run dev
-
-# Terminal 2 — autonomous payment monitor
-npm run monitor
-```
-
-**Expected output after a USDC payment arrives:**
-
-```
-──────────────────────────────────────────────────────────
-  USDC PAYMENT DETECTED
-──────────────────────────────────────────────────────────
-  From:    GABC...    Amount: 10.0000000 USDC
-
-──────────────────────────────────────────────────────────
-  SPLIT EXECUTED SUCCESSFULLY
-──────────────────────────────────────────────────────────
-  Vault 0: 60000000 stroops  (6.0000000 USDC)
-  Vault 1: 30000000 stroops  (3.0000000 USDC)
-  Vault 2: 10000000 stroops  (1.0000000 USDC)
-
-──────────────────────────────────────────────────────────
-  BLEND DEPOSIT — vault_2 savings
-──────────────────────────────────────────────────────────
-  💰 vault_2: 1.0000000 USDC deposited to Blend → earning yield
-  Blend txHash: def456...
-```
-
----
-
-## 🏆 Hackathon Context
-
-Propulsor was originally built for **She Ships 2026**, a 48-hour global hackathon celebrating International Women's Day (March 6–8, 2026), focused on financial tools for women in the informal economy in Latin America. Since then, the product scope has broadened to serve informal-economy workers across the region more generally, not one demographic exclusively.
-
-It was subsequently extended for the **Stellar Agentic Payments Hackathon** with the addition of the x402-powered autonomous agent. The agentic layer directly addresses the core problem: remittances arrive at unpredictable hours and the window to protect the money before external pressures redirect it can be minutes, not days. The agent closes that window to zero — the split happens the moment the payment lands on-chain, without requiring the user to be present or take any action.
-
-The architecture is testnet-grade for the demo and mainnet-ready in design.
-
----
-
-## 🔐 ZK Privacy Layer *(Stellar Hacks — Real-World ZK)*
-
-Propulsor now includes a zero-knowledge proof system that allows users to prove financial claims **without revealing their actual balances**. Built with Groth16 / BLS12-381 (verified on-chain via Soroban Protocol 22).
-
-### Feature 1 — Proof-of-Vault
-
-Prove that savings vault (vault_2) holds ≥ a threshold amount without revealing the exact balance. The proof is generated entirely in the browser (client-side WASM) and verified on-chain by the `ProofOfVaultVerifier` Soroban contract.
-
-**Why this matters for LATAM financial inclusion:** Workers in informal economies often face social or family pressure to share or redistribute their savings. A ZK proof lets them demonstrate creditworthiness or savings consistency to institutions, employers, or family members — without revealing their exact balance and without surrendering privacy.
-
-**Tech stack:**
-- Circuit: Circom 2.x + `GreaterEqThan(64)` comparator (BLS12-381 curve)
-- Proof system: Groth16 (snarkjs)
-- Verifier: `ProofOfVaultVerifier` Soroban contract — pairing check `e(-A,B)·e(α,β)·e(vk_x,γ)·e(C,δ)=1`
-- Frontend: snarkjs WASM runs in the browser — balance never leaves the device
-- Shareable proof: `/verify/{proof_hash}` — anyone can verify, no auth required
-
-**Flow:**
-1. User sets a threshold (e.g. "$50 USDC")
-2. Browser reads vault_2 balance from Soroban (stays local)
-3. snarkjs generates a Groth16 proof off-chain (~3-5s in WASM)
-4. Proof is submitted to `ProofOfVaultVerifier` on Stellar Testnet
-5. Contract runs the pairing check and emits `ProofVerified(user, threshold, ledger)`
-6. User gets a shareable link: `/verify/{proof_hash}`
-
-### Feature 2 — Proof-of-Consistent-Saving
-
-Proves that a user has completed splits in ≥ 6 distinct months out of the last 12, without revealing individual amounts. Uses RISC Zero zkVM (attestation pattern while CAP-0074/BN254 awaits Protocol 26).
-
-- Guest: `zk/risc0/consistent_saving/src/main.rs` — counts qualifying months from Supabase history
-- Host: `zk/risc0/consistent_saving/host/src/main.rs` — generates STARK receipt
-- Status: Off-chain proof + attester signature (direct on-chain verification pending CAP-0074)
-
-### Deployed Contracts (Testnet)
-
-| Contract | Network | Contract ID |
-|---|---|---|
-| ProofOfVaultVerifier | Stellar Testnet | `CAGUCQUMNSOJALPFM3A2T2TBDIDCFUDY3UQA6JIWAN4ZP3COPQ7HP7BU` |
-
-The contract is live, initialized with the circuit's verification key, and ready to accept proofs. Explore it at [Stellar Lab](https://lab.stellar.org/r/testnet/contract/CAGUCQUMNSOJALPFM3A2T2TBDIDCFUDY3UQA6JIWAN4ZP3COPQ7HP7BU).
-
-> **⚠️ Trusted Setup Notice:** The Groth16 proving key (`circuit.zkey`) was generated using a single-contributor Powers of Tau ceremony (development only). This means the toxic waste was not distributed among multiple independent parties. A production deployment would require a multi-party trusted setup ceremony or migration to a transparent proof system (e.g. STARK / PLONK). This implementation is suitable for hackathon/testnet use but **not for production with real funds**.
-
-### Proof-of-Vault Architecture
-
-```
-Browser (ZKProofPanel.tsx)
-  │  reads vault_2 balance from Soroban (private — stays on device)
-  │  snarkjs WASM generates Groth16/BLS12-381 proof (~3-5s)
-  │  negates A point client-side (pre-neg for pairing)
-  │  encodes G2 points as IETF/blst: c1 ∥ c0 (192 bytes each)
-  ▼
-ProofOfVaultVerifier (Soroban — Protocol 22)
-  │  pairing_check([-A,B], [α,β], [vk_x,γ], [C,δ]) → bool
-  │  nullifier = sha256(a∥b∥c) → replay protection
-  │  stores ProofRecord { user, threshold_usdc, ledger } (180-day TTL)
-  │  emits ProofVerified(user, threshold, nullifier)
-  ▼
-/verify/{proof_hash}  (VerifyProof.tsx — public, no auth)
-  └─ reads ProofRecord from contract + ledger close time from Horizon
-```
-
-### Generate a Proof Locally (CLI)
-
-Useful for scripting or testing outside the browser UI:
-
-```bash
-# 1. Compile circuit + trusted setup (requires circom ≥ 2.1 with --prime bls12381)
-cd zk/circuits/proof_of_vault
-make all        # compiles circuit, runs powers-of-tau, creates circuit.zkey
-
-# 2. Copy artifacts to the public folder (served to browser by Vite)
-cp build/circuit_js/circuit.wasm ../../../public/zk/circuit.wasm
-cp circuit.zkey ../../../public/zk/circuit.zkey
-
-# 3. Encode VK for the Soroban contract
-cd ../../
-pnpm install
-npx tsx scripts/encode_vk.ts     # outputs zk/scripts/vk_encoded.json
-
-# 4. Build + deploy the verifier contract with __constructor (Protocol 22)
-cd contracts/proof_of_vault_verifier
-stellar contract build
-cd ../../
-STELLAR_SECRET=S... npx tsx scripts/deploy_contract.ts
-# → copy the contract ID to VITE_ZK_VERIFIER_CONTRACT_ID in .env
-# (deploys and initializes with the VK atomically — no separate init step needed)
-
-# 5. Generate + verify a proof via CLI (the UI does this automatically)
-npx tsx scripts/generate_proof.ts --balance 1000000000 --threshold 500000000
-STELLAR_SECRET=S... VERIFIER_CONTRACT_ID=C... npx tsx scripts/verify_onchain.ts
-```
-
----
-
-## ⚠️ Known Limitations & Future Work
-
-| Item | Status | Notes |
-|---|---|---|
-| Blend deposit | Best-effort | Falls back gracefully if testnet pool is unavailable; vault_2 held in Stellar account |
-| Secret key management | Simplified for demo | Production requires HSM or MPC wallet — never store raw secrets in `.env` |
-| SEP-24 fiat on-ramp | Pending | Anchor integration needed for direct fiat → USDC deposit flow |
-| Stellar Mainnet | Pending | Contracts and agent are mainnet-ready; keypair + anchor coordination outstanding |
-| Blend withdrawal | Not implemented | Deposit-only for the demo scope; withdrawal follows the same `submit()` pattern |
+## Key Features
+
+- **Programmable vaults** — income is split by user-defined percentage rules (e.g. 60% spending / 30% emergency / 10% savings) and enforced on-chain via the `SplitProtocol` Soroban contract.
+- **Time & goal locks** — the `TimeVault` contract can lock a vault until a date or until it reaches a savings goal, whichever comes first.
+- **Agentic payments (x402)** — an autonomous agent detects incoming remittances the instant they land on-chain and executes the split without any user action, closing the window that social/family pressure could otherwise exploit. See [Agentic Payments Layer](./ARCHITECTURE.md#agentic-payments-layer).
+- **Automatic yield** — the savings vault is deposited into **Blend Protocol** right after every split, earning yield from minute one.
+- **Zero-knowledge privacy layer** — users can prove savings claims (e.g. "my savings vault holds ≥ $50") **without revealing their actual balance**, using a Groth16/BLS12-381 proof verified on-chain. See [ZK Privacy Layer](./ARCHITECTURE.md#zk-privacy-layer).
+- **Voice accessibility** — key flows are narrated via ElevenLabs TTS for users with low digital literacy.
+- **Bilingual** — the product ships in Spanish and English (`src/lib/i18n`).
 
 ---
 
@@ -267,256 +37,47 @@ STELLAR_SECRET=S... VERIFIER_CONTRACT_ID=C... npx tsx scripts/verify_onchain.ts
 | Blockchain | Stellar Network (Testnet / Mainnet) |
 | Smart Contracts | Soroban (Rust) |
 | Stellar SDK | `@stellar/stellar-sdk` |
+| Agentic Payments | x402 protocol (`@x402/stellar`, `@x402/express`) |
+| Yield | Blend Protocol |
+| Zero-Knowledge | Circom + Groth16 (snarkjs) · RISC Zero zkVM |
 | Voice / Accessibility | ElevenLabs API (`eleven_multilingual_v2`) |
 | UI Platform | Lovable |
 | Fonts | Space Grotesk + Space Mono (Google Fonts) |
 
 ---
 
-## Frontend Architecture
+## Quick Start
 
-```
-User
-  │
-  ▼
-React Frontend (Lovable)
-  │  Supabase Auth + PostgreSQL
-  │  /lib/stellar/client.ts      ← Stellar SDK layer
-  │  /lib/stellar/wallet.ts      ← Keypair management
-  │  /lib/stellar/contracts.ts   ← Soroban contract calls
-  │  /lib/elevenlabs/voice.ts    ← ElevenLabs TTS hook
-  ▼
-Supabase Edge Functions
-  │  /functions/tts              ← ElevenLabs proxy (API key server-side)
-  │  /functions/stellar-sign     ← Tx signing helper
-  ▼
-Stellar Horizon API             ← Balance, tx history, fee stats
-Stellar Soroban RPC             ← Contract execution
-  ▼
-Soroban Smart Contracts (Rust)  ← Deployed via stellar-cli
-  │  SplitProtocol::execute_split()
-  │  VaultManager::lock_vault()
-  │  TimeVault::release_on_condition()
-  ▼
-Stellar Testnet → Mainnet
-```
-
----
-
-## Environment Variables
-
-This is for the **frontend** (root `.env`) — not to be confused with `agent/.env`, covered in [Step 4](#step-4--configure-environment-variables) above. Every `VITE_`-prefixed value here is baked into the browser bundle at build time and is publicly readable — never put real secrets behind a `VITE_` name.
-
-Create `.env` in the project root:
-
-```env
-# Supabase
-VITE_SUPABASE_URL=your_supabase_url
-VITE_SUPABASE_PUBLISHABLE_KEY=your_supabase_publishable_key
-
-# Stellar
-VITE_STELLAR_NETWORK=TESTNET
-VITE_HORIZON_URL=https://horizon-testnet.stellar.org
-VITE_SOROBAN_RPC_URL=https://soroban-testnet.stellar.org
-
-# Soroban Contract IDs
-VITE_SPLIT_CONTRACT_ID=CCRH4EPUVIPESWYWOWPQ2QK3XN6KBR3RY6UFK36A4MXKKXIFH6ONRTVY
-VITE_VAULT_CONTRACT_ID=CC73UGT72A2MOZOSK6WFWMMIL32OJPJSPKEBFNBLK2GZJYNORERTSSWX
-VITE_ZK_VERIFIER_CONTRACT_ID=CAGUCQUMNSOJALPFM3A2T2TBDIDCFUDY3UQA6JIWAN4ZP3COPQ7HP7BU
-```
-
----
-
-## Application Routes
-
-| Route | Description | Auth |
-|---|---|---|
-| `/` | Landing page | Public |
-| `/simular` | Interactive split simulator | Public |
-| `/onboarding` | 3-step wizard + Stellar account creation | Post-signup |
-| `/dashboard` | Vaults & balance overview | Protected |
-| `/dashboard/bovadas` | Vault management | Protected |
-| `/dashboard/transacciones` | Transaction history (local + Stellar) | Protected |
-| `/dashboard/configuracion` | Profile, PIN, voice preferences | Protected |
-| `/verify/:proofHash` | Public ZK proof verification | Public |
-
----
-
-## Database Schema (Supabase)
-
-```sql
--- User profile
-users_profile (
-  id              uuid PRIMARY KEY REFERENCES auth.users,
-  name            text,
-  profile_type    enum('jefa_hogar','emprendedora','trabajadora','freelancer'),
-  stellar_public_key    text,
-  stellar_secret_encrypted text,  
-  stellar_funded  boolean DEFAULT false,
-  onboarding_complete boolean DEFAULT false,
-  voice_enabled   boolean DEFAULT true,
-  created_at      timestamptz DEFAULT now()
-)
-
--- Vaults
-vaults (
-  id              uuid PRIMARY KEY,
-  user_id         uuid REFERENCES users_profile,
-  name            text,
-  icon            text,
-  vault_type      enum('disponible','time_lock','meta'),
-  percentage      integer,          
-  balance_usdc    numeric DEFAULT 0,
-  unlock_date     timestamptz,      
-  goal_amount     numeric,        
-  color_variant   enum('pink','mint','soft'),
-  stellar_account_id text,          
-  created_at      timestamptz DEFAULT now()
-)
-
--- Transactions
-transactions (
-  id              uuid PRIMARY KEY,
-  user_id         uuid REFERENCES users_profile,
-  vault_id        uuid REFERENCES vaults,
-  type            enum('deposit','withdrawal','split','lock'),
-  amount_usdc     numeric,
-  amount_pen      numeric,
-  stellar_tx_hash text,
-  status          enum('confirmed','pending','simulated'),
-  description     text,
-  created_at      timestamptz DEFAULT now()
-)
-
--- Split rules
-split_rules (
-  id              uuid PRIMARY KEY,
-  user_id         uuid REFERENCES users_profile,
-  vault_id        uuid REFERENCES vaults,
-  percentage      integer,
-  updated_at      timestamptz DEFAULT now()
-)
-```
-
----
-
-## Frontend Modules
-
-### `/lib/stellar/`
-
-```
-client.ts       — SorobanRpc.Server + Horizon.Server configuration
-wallet.ts       — generateKeypair, fundTestnetAccount, getAccountBalance,
-                  saveEncryptedKeypair, loadDecryptedKeypair
-contracts.ts    — executeSplit, lockVault, getVaultBalances
-                  (auto-simulation when CONTRACT_ID is empty)
-streaming.ts    — Horizon payment streaming for real-time detection
-fees.ts         — fetchCurrentFee, fetchXLMPrice (CoinGecko free API)
-```
-
-### `/lib/elevenlabs/`
-
-```
-useVoice.ts     — Hook: { speak, stop, isSpeaking }
-                  Calls Supabase Edge Function /functions/tts
-                  In-memory cache for repeated texts
-                  Fails silently if the API is unresponsive
-messages.ts     — buildSplitConfirmation(vaults, total)
-                  buildSimulatorSummary(pen, usdc, splits)
-                  Hardcoded onboarding texts
-```
-
-### `/components/stellar/`
-
-```
-NetworkStatus.tsx    — Pill: STELLAR TESTNET · green/yellow/red
-AccountCreation.tsx  — Animated terminal for onboarding (Friendbot flow)
-TxHash.tsx           — Truncated hash + copy button + Explorer link
-BalanceDisplay.tsx   — USDC balance with 30s polling
-```
-
-### `/components/voice/`
-
-```
-SpeakerButton.tsx    — 🔊 icon with pulse animation (pink)
-SoundWaveBars.tsx    — 3 animated bars while speaking
-VoiceConfirmation.tsx — Post-split audio feedback
-```
-
----
-
-## Smart Contracts 
-
-> Contracts are compiled and deployed using Stellar CLI
+### Frontend
 
 ```bash
-# Requirements
-rustup target add wasm32-unknown-unknown
-cargo install stellar-cli --features opt
-
-# Build
-cd contracts/split-protocol
-cargo build --target wasm32-unknown-unknown --release
-
-# Deploy to Testnet
-stellar contract deploy \
-  --wasm target/wasm32-unknown-unknown/release/split_protocol.wasm \
-  --source account \
-  --network testnet
-
-# Copy the resulting Contract ID → VITE_SPLIT_CONTRACT_ID in .env
+npm install
+npm run dev      # http://localhost:5173
 ```
 
-### Contract Logic
+Copy `.env.example` to `.env` and fill in your Supabase and Stellar values — see [Environment Variables](./ARCHITECTURE.md#environment-variables) for the full reference.
 
-**SplitProtocol** — Distributes income by percentages:
+### Autonomous agent (x402 + Horizon monitor)
 
-$$\text{vault}_i = \text{income} \times \frac{p_i}{100}, \quad \sum_{i=1}^{n} p_i = 100$$
+The agent watches a Stellar account for incoming USDC and triggers the on-chain split itself. Full setup (keypair generation, funding, trustlines, env vars) lives in [ARCHITECTURE.md → Agentic Payments Layer](./ARCHITECTURE.md#agentic-payments-layer) and [`agent/README.md`](./agent/README.md).
 
-**TimeVault** — Dual release condition:
+```bash
+cd agent && npm install && npm run setup   # register split rules on-chain
+npm run dev       # terminal 1 — x402-protected split server
+npm run monitor   # terminal 2 — autonomous payment monitor
+```
 
-$$\text{release} = \begin{cases} \text{true} & \text{if } t \geq t_{\text{unlock}} \\ \text{true} & \text{if } \text{balance} \geq \text{goal} \\ \text{false} & \text{otherwise} \end{cases}$$
+### Smart contracts
+
+Contracts live under `contracts/` (`split_protocol`, `time_vault`) and `zk/contracts/` (`proof_of_vault_verifier`). Build/deploy steps and deployed Testnet contract IDs are in [ARCHITECTURE.md → Smart Contracts](./ARCHITECTURE.md#smart-contracts).
 
 ---
 
-## ElevenLabs Integration
+## Documentation
 
-Voice is used at 3 specific points for accessibility for users with low digital literacy:
-
-| Point | Trigger | Message |
-|---|---|---|
-| Onboarding Step 1 | Auto-play on mount (+600ms delay) | Personalized welcome by profile |
-| Post-split confirm | Auto-play on contract completion | Narration of actual vault breakdown |
-| Simulator | Click "Listen to summary" | Dynamic summary based on current sliders |
-
-**The API key never reaches the client.** Everything goes through the Edge Function `/functions/tts`.
-
----
-
-## Design System
-
-```
-Colors
-  --bg:        #1e1a1b   Main background (always dark)
-  --bg-deep:   #181416   Deep sections
-  --bg-card:   #252023   Cards
-  --pink:      #ffb3c6   Baby pink accent — CTAs, emotional, empowerment
-  --mint:      #b8f0c8   Mint green accent — technical, Stellar, confirmations
-  --white:     #fdf4f6   Primary text
-  --sub:       #9a8890   Secondary text
-  --dim:       #5a4850   Dimmed text / labels
-
-Typography
-  Space Grotesk 700  — Headings, uppercase, tracking −0.03em
-  Space Mono         — Labels, code, monospace UI
-  Space Grotesk 400  — Body text
-
-Rules
-  · Pink (#ffb3c6) for emotional elements and CTAs
-  · Mint (#b8f0c8) for technical elements and success states
-  · No gradients on backgrounds — solid dark colors only
-  · Accents only on text, borders (low opacity) and micro-glows (≤8% opacity)
-```
+- **[ARCHITECTURE.md](./ARCHITECTURE.md)** — system diagrams, smart contract logic, ZK proof design, database schema, environment variables, module reference.
+- **[BRANDKIT.md](./BRANDKIT.md)** — colors, typography, logo, voice & tone for decks, posts, and any Propulsor-branded material.
+- **[agent/README.md](./agent/README.md)** — full environment variable reference and Blend setup for the autonomous agent.
 
 ---
 
@@ -527,84 +88,34 @@ Rules
 | Landing page | ✅ Complete |
 | Auth (Supabase) | ✅ Complete |
 | Onboarding wizard | ✅ Complete |
-| Dashboard overview | ✅ Complete |
-| Vault management | ✅ Complete |
-| Transaction history | ✅ Complete |
+| Dashboard, vaults, transaction history | ✅ Complete |
 | Interactive simulator | ✅ Complete |
 | Stellar SDK layer | ✅ Complete |
 | ElevenLabs voice | ✅ Complete |
-| Soroban contracts (Rust) | ✅ Deployed Testnet |
-| x402 split server (`server.ts`) | ✅ Complete |
-| Autonomous agent (`monitor.ts`) | ✅ Complete |
-| Blend yield integration (`blend.ts`) | ✅ Complete (best-effort) |
+| Soroban contracts (`SplitProtocol`, `TimeVault`) | ✅ Deployed Testnet |
+| x402 split server + autonomous agent | ✅ Complete |
+| Blend yield integration | ✅ Complete (best-effort) |
+| ZK Proof-of-Vault (Groth16/BLS12-381) | ✅ Live on Testnet |
+| ZK Proof-of-Consistent-Saving (RISC Zero) | 🔜 Attestation pattern — waiting on CAP-0074 |
 | SEP-24 fiat on-ramp | 🔜 Post-hackathon |
 | Stellar Mainnet | 🔜 Post-hackathon |
-| ZK Proof-of-Vault (Groth16/BLS12-381) | ✅ Live on Testnet — `CAGUCQU...P7BU` |
-| ZK Proof-of-Consistent-Saving (RISC Zero) | 🔜 Attestation pattern — waiting CAP-0074 |
+
+Full details and known limitations: [ARCHITECTURE.md → Known Limitations & Future Work](./ARCHITECTURE.md#known-limitations--future-work).
 
 ---
 
-## 📦 Deployed Contracts (Stellar Testnet)
+## Hackathon Context
 
-### Network & Infrastructure
+Propulsor was originally built for **She Ships 2026**, a 48-hour global hackathon celebrating International Women's Day (March 6–8, 2026), focused on financial tools for women in the informal economy in Latin America. Since then, the product scope has broadened to serve informal-economy workers across the region more generally, not one demographic exclusively.
 
-| Item | Value |
-|---|---|
-| **Network** | Stellar Testnet |
-| **Soroban RPC** | `https://soroban-testnet.stellar.org` |
-| **Horizon** | `https://horizon-testnet.stellar.org` |
-| **USDC Issuer** | `GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5` *(Circle Testnet)* |
-| **x402 Facilitator** | `https://www.x402.org/facilitator` |
+It was subsequently extended for the **Stellar Agentic Payments Hackathon** with the addition of the x402-powered autonomous agent, and again for **Stellar Hacks — Real-World ZK** with the zero-knowledge privacy layer.
 
-### SplitProtocol
-
-| Field | Value |
-|---|---|
-| **Contract ID** | `CCRH4EPUVIPESWYWOWPQ2QK3XN6KBR3RY6UFK36A4MXKKXIFH6ONRTVY` |
-| **Wasm Hash** | `ea57fb45e7dd0e5865d9512b50683d22b7076f1eba36c24dffc7b09077533c1e` |
-| **Deploy Tx** | [`d11b2ad6…0834ddc7`](https://stellar.expert/explorer/testnet/tx/d11b2ad60355df81a03a2a0d16c626fe016f0e1265f31d280292549b0834ddc7) |
-| **Lab** | [View on Stellar Lab](https://lab.stellar.org/r/testnet/contract/CCRH4EPUVIPESWYWOWPQ2QK3XN6KBR3RY6UFK36A4MXKKXIFH6ONRTVY) |
-
-### TimeVault
-
-| Field | Value |
-|---|---|
-| **Contract ID** | `CC73UGT72A2MOZOSK6WFWMMIL32OJPJSPKEBFNBLK2GZJYNORERTSSWX` |
-| **Wasm Hash** | `cf3edcf33cdbbfbe762d39de437b03d711e7d320510c7029cf593f5ae50bc72d` |
-| **Deploy Tx** | [`011aaf17…3651d6ed`](https://stellar.expert/explorer/testnet/tx/011aaf17f4993bb9242a84c4d983e975d260313ebd9434a354f2b8cd3651d6ed) |
-| **Lab** | [View on Stellar Lab](https://lab.stellar.org/r/testnet/contract/CC73UGT72A2MOZOSK6WFWMMIL32OJPJSPKEBFNBLK2GZJYNORERTSSWX) |
-
-### Testnet Verification
-
-```bash
-# set_rules — configure 60/30/10
-stellar contract invoke \
-  --source-account deployer \
-  --id CCRH4EPUVIPESWYWOWPQ2QK3XN6KBR3RY6UFK36A4MXKKXIFH6ONRTVY \
-  --network testnet \
-  -- set_rules \
-  --user $(stellar keys public-key deployer) \
-  --rules '[{"vault_id":0,"percentage":60},{"vault_id":1,"percentage":30},{"vault_id":2,"percentage":10}]'
-# ✅ Event: rules_set — 3 rules
-
-# execute_split — split 1,000,000,000 stroops
-stellar contract invoke \
-  --source-account deployer \
-  --id CCRH4EPUVIPESWYWOWPQ2QK3XN6KBR3RY6UFK36A4MXKKXIFH6ONRTVY \
-  --network testnet \
-  -- execute_split \
-  --user $(stellar keys public-key deployer) \
-  --income 1000000000
-# ✅ Event: split_done
-# Result: [vault_0: 600M, vault_1: 300M, vault_2: 100M]
-```
+The architecture is testnet-grade for the demo and mainnet-ready in design.
 
 ---
 
 ## Team
 
 Built with 💜 in Lima, Peru.
-
----
 
 *Built on Stellar · Powered by Soroban · She Ships 2026 + Stellar Agentic Payments Hackathon + Stellar Hacks Real-World ZK 💜*
