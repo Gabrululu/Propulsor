@@ -6,7 +6,10 @@
   "scripts": {
     "generate-proof": "tsx scripts/generate_proof.ts",
     "verify-onchain": "tsx scripts/verify_onchain.ts",
-    "encode-vk": "tsx scripts/encode_vk.ts"
+    "encode-vk": "tsx scripts/encode_vk.ts",
+    "encode-risc0-vk": "tsx scripts/encode_risc0_vk.ts",
+    "deploy-consistent-saving-verifier": "tsx scripts/deploy_consistent_saving_verifier.ts",
+    "verify-onchain-consistent-saving": "tsx scripts/verify_onchain_consistent_saving.ts"
   },
   "dependencies": {
     "@stellar/stellar-sdk": "^14.6.1",

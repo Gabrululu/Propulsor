@@ -1,0 +1,26 @@
+[package]
+name = "host"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+methods = { path = "../methods" }
+risc0-zkvm = { version = "=3.0.6" }
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+reqwest = { version = "0.12", features = ["blocking", "json"] }
+hex = "0.4"
+
+# Cross-check-only deps (examples/crosscheck_fixture.rs) — independent, from-scratch
+# reimplementation of the SPEC.md formulas using plain ark-* crates, deliberately NOT
+# calling into risc0-groth16's verifier, so a passing check is real evidence the
+# transcription in SPEC.md is correct rather than circular validation.
+risc0-circuit-recursion = { version = "=4.0.5" }
+risc0-zkp = { version = "=3.0.5" }
+ark-bn254 = { version = "=0.5.0" }
+ark-groth16 = { version = "=0.5.0" }
+ark-ff = { version = "=0.5.0" }
+ark-serialize = { version = "=0.5.0" }
+ark-ec = { version = "=0.5.0" }
+sha2 = { version = "=0.10.9" }

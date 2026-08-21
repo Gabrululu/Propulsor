@@ -1,0 +1,25 @@
+[package]
+name = "consistent_saving_verifier"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+# BN254 host functions (g1_add/g1_mul/g1_msm/pairing_check) require CAP-0074,
+# which shipped in Protocol 25 — soroban-sdk >= 25.0.0. See SPEC.md.
+soroban-sdk = { version = "=27.0.6", features = ["alloc"] }
+
+[dev-dependencies]
+soroban-sdk = { version = "=27.0.6", features = ["testutils"] }
+
+[profile.release]
+opt-level = "z"
+overflow-checks = true
+debug = 0
+strip = "symbols"
+debug-assertions = false
+panic = "abort"
+codegen-units = 1
+lto = true

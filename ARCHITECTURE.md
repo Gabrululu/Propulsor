@@ -256,11 +256,16 @@ ProofOfVaultVerifier (Soroban — Protocol 22)
 
 ### Feature 2 — Proof-of-Consistent-Saving
 
-Proves a user has completed splits in ≥ 6 distinct months out of the last 12, without revealing individual amounts. Uses the RISC Zero zkVM (attestation pattern while CAP-0074/BN254 awaits Protocol 26).
+Proves a user has completed splits in ≥ 6 distinct months out of the last 12, without revealing individual amounts. Uses the RISC Zero zkVM.
 
-- Guest: `zk/risc0/consistent_saving/src/main.rs` — counts qualifying months from Supabase history
-- Host: `zk/risc0/consistent_saving/host/src/main.rs` — generates a STARK receipt
-- Status: off-chain proof + attester signature (direct on-chain verification pending CAP-0074)
+- Guest: `zk/risc0/consistent_saving/methods/guest/src/main.rs` — counts qualifying months from Supabase history
+- Host: `zk/risc0/consistent_saving/host/src/main.rs` — generates a `Groth16Receipt` (STARK wrapped to BN254 via `ProverOpts::groth16()`)
+- On-chain verifier: `zk/contracts/consistent_saving_verifier` (`ConsistentSavingVerifier`, Soroban/BN254, CAP-0074) — mirrors `ProofOfVaultVerifier`'s BLS12-381 pairing-check pattern, generalized to 5 public inputs and RISC Zero's published (no-new-trusted-setup) verifying key. See `zk/risc0/consistent_saving/SPEC.md` for the full derivation.
+- Status: **live on Testnet.** Phase 1 (empirical formula cross-check against a real Groth16 receipt), Phase 3 (contract logic + tests, including a real end-to-end proof accepted via Soroban's actual BN254 host functions), and Phase 4 (deploy + on-chain submission) all completed 2026-08-21.
+
+**Deployed contract (Testnet):** `ConsistentSavingVerifier` → `CDBUSPDUC4AYSWPVCX5QQLRVFJUEJDW3BTZ5EOVH77TCJXW3CKC5X6KQ`. Live, initialized with RISC Zero's published Groth16 VK and the `consistent_saving` guest's image ID. A real proof (7/12 qualifying months, synthetic data) was submitted and accepted on-chain: txHash `cb367fecf701cd9a798835d662a711e96cc67c2ad333c36f753a0fed5c32f70d`, nullifier `42f0536fe0a87502d13058db3c717246af7b7199165efa4123d5d9b3a6f07b39` — `get_proof` confirms the stored `ProofRecord` decodes to `months_with_saving=7, threshold_months=6`, matching the guest's real input exactly.
+
+> **Note (checked 2026-08-21):** the code comments here used to say this is "waiting on CAP-0074 (Protocol 26)" — that was stale. [CAP-0074](https://github.com/stellar/stellar-protocol/blob/master/core/cap-0074.md) (host functions for BN254: `bn254_g1_add`, `bn254_g1_mul`, `bn254_multi_pairing_check`) reached **Final** status and actually shipped in **Protocol 25 ("X-Ray")** — live on Testnet since Jan 7, 2026 and Mainnet since Jan 22, 2026. The network is on Protocol 27 as of this writing, so the host functions have been available for 7+ months. The on-chain verifier contract described above now exists.
 
 ### Generate a Proof Locally (CLI)
 
@@ -289,6 +294,40 @@ STELLAR_SECRET=S... npx tsx scripts/deploy_contract.ts
 # 5. Generate + verify a proof via CLI (the UI does this automatically)
 npx tsx scripts/generate_proof.ts --balance 1000000000 --threshold 500000000
 STELLAR_SECRET=S... VERIFIER_CONTRACT_ID=C... npx tsx scripts/verify_onchain.ts
+```
+
+### Generate a Consistent-Saving Proof Locally (CLI)
+
+```bash
+# Requires Docker (RISC Zero's Groth16 STARK-to-SNARK wrapper runs in a
+# container — see zk/risc0/README.md) and the RISC Zero toolchain (rzup).
+
+# 1. Generate a real Groth16Receipt against your own Supabase split history
+cd zk/risc0/consistent_saving/host
+SUPABASE_URL=... SUPABASE_KEY=... USER_ID=... cargo run --release
+# → writes fixture.json (seal + journal + image ID)
+#
+# Or, to validate the SPEC.md formulas end-to-end against synthetic data
+# instead (no Supabase needed — this is Phase 1's exit criteria):
+#   cargo run --release --example crosscheck_fixture
+
+# 2. Encode RISC Zero's published VK for the Soroban contract (one-time —
+#    this VK is fixed, not per-application; no new trusted setup)
+cd ../../../
+npm install
+npx tsx scripts/encode_risc0_vk.ts   # outputs zk/scripts/vk_risc0_encoded.json
+
+# 3. Build + deploy ConsistentSavingVerifier with __constructor (Protocol 22)
+cd contracts/consistent_saving_verifier
+cargo build --target wasm32v1-none --release
+cd ../../
+STELLAR_SECRET=S... npx tsx scripts/deploy_consistent_saving_verifier.ts
+# → copy the contract ID to VITE_CONSISTENT_SAVING_VERIFIER_CONTRACT_ID in .env
+# (image_id defaults to fixture.json's image_id_hex — pass --image-id to override)
+
+# 4. Submit the fixture's proof on-chain
+STELLAR_SECRET=S... CONSISTENT_SAVING_VERIFIER_CONTRACT_ID=C... \
+  npx tsx scripts/verify_onchain_consistent_saving.ts
 ```
 
 ---

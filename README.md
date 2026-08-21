@@ -96,7 +96,7 @@ Contracts live under `contracts/` (`split_protocol`, `time_vault`) and `zk/contr
 | x402 split server + autonomous agent | ✅ Complete |
 | Blend yield integration | ✅ Complete (best-effort) |
 | ZK Proof-of-Vault (Groth16/BLS12-381) | ✅ Live on Testnet |
-| ZK Proof-of-Consistent-Saving (RISC Zero) | 🔜 Attestation pattern — waiting on CAP-0074 |
+| ZK Proof-of-Consistent-Saving (RISC Zero) | 🔜 Attestation pattern — on-chain BN254 verifier not yet built (see [note](./ARCHITECTURE.md#feature-2--proof-of-consistent-saving)) |
 | SEP-24 fiat on-ramp | 🔜 Post-hackathon |
 | Stellar Mainnet | 🔜 Post-hackathon |
 

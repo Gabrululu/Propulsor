@@ -12,8 +12,10 @@
 //   - threshold_months: u32    (minimum required, e.g. 6)
 //   - passes: bool             (months_with_saving >= threshold_months)
 //
-// STATUS: Attestation pattern until CAP-0074 (BN254) is live on Stellar Testnet.
-//         The STARK receipt is verified off-chain; the attester signs the journal.
+// This journal is committed into a Groth16Receipt (BN254) and verified
+// on-chain by the ConsistentSavingVerifier Soroban contract — see
+// ../../SPEC.md for the exact claim-digest / public-input derivation the
+// contract reconstructs from (image ID, journal bytes).
 
 #![no_main]
 
