@@ -1,6 +1,9 @@
-// Network configuration — Stellar Testnet
-export const HORIZON_URL = "https://horizon-testnet.stellar.org";
-export const SOROBAN_RPC_URL = "https://soroban-testnet.stellar.org";
+// Network configuration — Stellar (defaults to Testnet, overridable via env)
+export const STELLAR_NETWORK = import.meta.env.VITE_STELLAR_NETWORK || "TESTNET";
+export const HORIZON_URL =
+  import.meta.env.VITE_HORIZON_URL || "https://horizon-testnet.stellar.org";
+export const SOROBAN_RPC_URL =
+  import.meta.env.VITE_SOROBAN_RPC_URL || "https://soroban-testnet.stellar.org";
 export const FRIENDBOT_URL = "https://friendbot.stellar.org";
 export const STELLAR_EXPLORER_BASE = "https://stellar.expert/explorer/testnet";
 export const NETWORK_PASSPHRASE = "Test SDF Network ; September 2015";
