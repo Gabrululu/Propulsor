@@ -141,56 +141,6 @@ export type Database = {
         }
         Relationships: []
       }
-      zk_proof_jobs: {
-        Row: {
-          created_at: string | null
-          error_message: string | null
-          id: string
-          months_with_saving: number | null
-          proof_hash: string | null
-          proof_type: string
-          status: string
-          threshold_months: number | null
-          tx_hash: string | null
-          updated_at: string | null
-          user_id: string
-        }
-        Insert: {
-          created_at?: string | null
-          error_message?: string | null
-          id?: string
-          months_with_saving?: number | null
-          proof_hash?: string | null
-          proof_type?: string
-          status?: string
-          threshold_months?: number | null
-          tx_hash?: string | null
-          updated_at?: string | null
-          user_id: string
-        }
-        Update: {
-          created_at?: string | null
-          error_message?: string | null
-          id?: string
-          months_with_saving?: number | null
-          proof_hash?: string | null
-          proof_type?: string
-          status?: string
-          threshold_months?: number | null
-          tx_hash?: string | null
-          updated_at?: string | null
-          user_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "zk_proof_jobs_user_id_fkey"
-            columns: ["user_id"]
-            isOneToOne: false
-            referencedRelation: "users_profile"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
     }
     Views: {
       [_ in never]: never
