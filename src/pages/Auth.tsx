@@ -198,13 +198,17 @@ const Auth = () => {
       const syntheticPassword = `stlr_${address}`;
 
       // Try to sign in first
-      const { error: signInError } = await supabase.auth.signInWithPassword({
+      const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
         email: syntheticEmail,
         password: syntheticPassword,
       });
 
+      let userId = signInData?.user?.id;
+      let isNewUser = false;
+
       if (signInError) {
         // If sign-in fails, create account
+        isNewUser = true;
         const { error: signUpError } = await supabase.auth.signUp({
           email: syntheticEmail,
           password: syntheticPassword,
@@ -219,7 +223,7 @@ const Auth = () => {
         if (signUpError) throw signUpError;
 
         // Sign in after signup
-        const { error: retryError } = await supabase.auth.signInWithPassword({
+        const { data: retryData, error: retryError } = await supabase.auth.signInWithPassword({
           email: syntheticEmail,
           password: syntheticPassword,
         });
@@ -229,10 +233,24 @@ const Auth = () => {
           setWalletLoading(null);
           return;
         }
+        userId = retryData.user?.id;
       }
 
       toast.success(`Conectado con ${walletName}`);
-      navigate("/onboarding");
+
+      // Returning users with onboarding already done go straight to the
+      // dashboard — only new accounts (or ones that never finished setup)
+      // go through onboarding again.
+      if (isNewUser || !userId) {
+        navigate("/onboarding");
+      } else {
+        const { data: profile } = await supabase
+          .from("users_profile")
+          .select("onboarding_complete")
+          .eq("id", userId)
+          .single();
+        navigate(profile?.onboarding_complete ? "/dashboard" : "/onboarding");
+      }
     } catch (err: unknown) {
       console.error("Wallet auth error:", err);
       const msg = err instanceof Error ? err.message : "No se pudo conectar la wallet";

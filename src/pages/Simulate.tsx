@@ -9,9 +9,9 @@ import SoundWaveBars from "@/components/voice/SoundWaveBars";
 import { useVoice } from "@/hooks/useVoice";
 import { buildSimulatorSummary } from "@/lib/voiceMessages";
 import { useStellarFees } from "@/hooks/useStellarFees";
+import { useExchangeRate } from "@/hooks/useExchangeRate";
 import { useLanguage } from "@/lib/i18n/LanguageContext";
 
-const RATE = 3.71; // PEN to USD
 const BANK_MONTHLY_FEE = 15; // S/15.00/mes average bank fee
 
 // The voice summary is narrated in Spanish regardless of UI language (it's an
@@ -29,6 +29,7 @@ const Simulate = () => {
   const hasListened = useRef(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout>>();
   const fees = useStellarFees();
+  const { rate: RATE } = useExchangeRate();
 
   const pen = parseFloat(amountPEN) || 0;
   const usdc = pen / RATE;
@@ -105,7 +106,7 @@ const Simulate = () => {
                   />
                 </div>
                 <p className="text-dimmed text-xs font-mono mt-2">
-                  ≈ ${usdc.toFixed(2)} USDC (1 USD = S/{RATE})
+                  ≈ ${usdc.toFixed(2)} USDC (1 USD = S/{RATE.toFixed(2)})
                 </p>
               </div>
 

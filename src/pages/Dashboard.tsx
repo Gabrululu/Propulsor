@@ -7,6 +7,7 @@ import AgentStatusCard from "@/components/agent/AgentStatusCard";
 import AgentActivityFeed from "@/components/agent/AgentActivityFeed";
 import ZKProofPanel from "@/components/ZKProofPanel";
 import ConsistentSavingProofPanel from "@/components/ConsistentSavingProofPanel";
+import { useExchangeRate } from "@/hooks/useExchangeRate";
 import { useStellarBalance } from "@/hooks/useStellarBalance";
 import { useAgentStatus } from "@/hooks/useAgentStatus";
 import { getHorizonServer } from "@/lib/stellar/client";
@@ -39,6 +40,7 @@ const Dashboard = () => {
   const { user } = useAuth();
   const contracts = useContracts();
   const { balance } = useStellarBalance(publicKey);
+  const { rate: penPerUsd } = useExchangeRate();
   const streamRef = useRef<(() => void) | null>(null);
 
   // User profile name
@@ -308,7 +310,7 @@ const Dashboard = () => {
             </span>
             <span className="text-body-muted text-sm">USDC</span>
           </div>
-          <p className="text-dimmed text-xs font-mono mt-1">≈ S/ {(totalBalance * 3.71).toFixed(2)}</p>
+          <p className="text-dimmed text-xs font-mono mt-1">≈ S/ {(totalBalance * penPerUsd).toFixed(2)}</p>
           {balance.xlm > 0 && (
             <p className="text-dimmed text-xs font-mono mt-0.5">{balance.xlm.toFixed(4)} XLM</p>
           )}
