@@ -7,8 +7,13 @@
 //
 // Requires Docker (the Groth16 STARK-to-SNARK wrapper runs in a container).
 //
+// Reads split history via the zk-fetch-user-data Edge Function rather than
+// Supabase's REST API directly — Lovable Cloud never exposes
+// SUPABASE_SERVICE_ROLE_KEY outside its own Edge Functions, so this
+// authenticates with the same shared secret zk-proof-webhook uses.
+//
 // Usage:
-//   SUPABASE_URL=... SUPABASE_KEY=... USER_ID=... cargo run
+//   SUPABASE_URL=... ZK_WEBHOOK_SECRET=... USER_ID=... cargo run
 //   Optional: MIN_AMOUNT_USDC=<base units>  THRESHOLD_MONTHS=6
 
 use methods::{CONSISTENT_SAVING_ELF, CONSISTENT_SAVING_ID};
@@ -63,9 +68,9 @@ fn main() {
         .with_env_filter(tracing_subscriber::filter::EnvFilter::from_default_env())
         .init();
 
-    let user_id         = env::var("USER_ID").expect("USER_ID env var required");
-    let supabase_url    = env::var("SUPABASE_URL").expect("SUPABASE_URL env var required");
-    let supabase_key    = env::var("SUPABASE_KEY").expect("SUPABASE_KEY env var required");
+    let user_id          = env::var("USER_ID").expect("USER_ID env var required");
+    let supabase_url     = env::var("SUPABASE_URL").expect("SUPABASE_URL env var required");
+    let zk_webhook_secret = env::var("ZK_WEBHOOK_SECRET").expect("ZK_WEBHOOK_SECRET env var required");
     let min_amount_usdc = env::var("MIN_AMOUNT_USDC")
         .ok()
         .and_then(|v| v.parse::<u64>().ok())
@@ -77,21 +82,24 @@ fn main() {
 
     println!("→ Fetching split history for user {}...", user_id);
 
-    // Fetch last 12 months of splits from Supabase REST API
-    // (agent_activity is populated by supabase/functions/agent-webhook on every
-    // split_executed event — see ARCHITECTURE.md → Database Schema)
+    // Fetch last 12 months of splits via the zk-fetch-user-data Edge Function.
+    // Lovable Cloud only injects SUPABASE_SERVICE_ROLE_KEY inside Edge
+    // Functions — it can't be extracted into a GitHub Actions secret — so
+    // this runner authenticates with ZK_WEBHOOK_SECRET instead, and the
+    // function does the actual service_role-authenticated read of
+    // agent_activity (populated by supabase/functions/agent-webhook on every
+    // split_executed event — see ARCHITECTURE.md → Database Schema).
     let client = reqwest::blocking::Client::new();
     let rows: Vec<SupabaseRow> = client
         .get(format!(
-            "{}/rest/v1/agent_activity?user_id=eq.{}&event_type=eq.split_executed&order=created_at.desc&limit=120",
+            "{}/functions/v1/zk-fetch-user-data?user_id={}",
             supabase_url, user_id
         ))
-        .header("apikey", &supabase_key)
-        .header("Authorization", format!("Bearer {}", supabase_key))
+        .header("Authorization", format!("Bearer {}", zk_webhook_secret))
         .send()
-        .expect("Supabase request failed")
+        .expect("zk-fetch-user-data request failed")
         .json()
-        .expect("Failed to parse Supabase response");
+        .expect("Failed to parse zk-fetch-user-data response");
 
     println!("  Found {} split records", rows.len());
 

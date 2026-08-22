@@ -30,7 +30,9 @@ consistent_saving/
 
 ```bash
 cd consistent_saving
-SUPABASE_URL=... SUPABASE_KEY=... USER_ID=... cargo run --release -p host
+SUPABASE_URL=... ZK_WEBHOOK_SECRET=... USER_ID=... cargo run --release -p host
 ```
+
+`ZK_WEBHOOK_SECRET` authenticates against the `zk-fetch-user-data` Edge Function, which does the actual service_role-authenticated read — Lovable Cloud never exposes `SUPABASE_SERVICE_ROLE_KEY` outside its own Edge Functions, so the host can't hit Supabase's REST API directly (see `ARCHITECTURE.md` → "Backend secrets for Proof-of-Consistent-Saving generation").
 
 Produces `fixture.json` (seal + journal + image ID) — used both as a `#[cfg(test)]` fixture for `ConsistentSavingVerifier` (Phase 3 of the on-chain verifier plan) and as the input to the Phase 4 submission script.

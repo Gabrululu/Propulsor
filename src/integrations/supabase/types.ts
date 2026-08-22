@@ -143,7 +143,7 @@ export type Database = {
       }
       zk_proof_jobs: {
         Row: {
-          created_at: string | null
+          created_at: string
           error_message: string | null
           id: string
           months_with_saving: number | null
@@ -152,11 +152,11 @@ export type Database = {
           status: string
           threshold_months: number | null
           tx_hash: string | null
-          updated_at: string | null
+          updated_at: string
           user_id: string
         }
         Insert: {
-          created_at?: string | null
+          created_at?: string
           error_message?: string | null
           id?: string
           months_with_saving?: number | null
@@ -165,11 +165,11 @@ export type Database = {
           status?: string
           threshold_months?: number | null
           tx_hash?: string | null
-          updated_at?: string | null
+          updated_at?: string
           user_id: string
         }
         Update: {
-          created_at?: string | null
+          created_at?: string
           error_message?: string | null
           id?: string
           months_with_saving?: number | null
@@ -178,7 +178,7 @@ export type Database = {
           status?: string
           threshold_months?: number | null
           tx_hash?: string | null
-          updated_at?: string | null
+          updated_at?: string
           user_id?: string
         }
         Relationships: [

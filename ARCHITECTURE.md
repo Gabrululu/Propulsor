@@ -276,7 +276,10 @@ ConsistentSavingProofPanel → POST request-consistent-saving-proof (Edge Functi
   → dispatches .github/workflows/generate-consistent-saving-proof.yml via the GitHub API
 
 GitHub Actions (ubuntu-latest, has Docker)
-  → cargo run --release -p host   (RISC Zero proving, several minutes)
+  → cargo run --release -p host
+      → GET zk-fetch-user-data (Edge Function — the runner has no service_role
+        access, so this is how the host reads the user's split history)
+      → RISC Zero proving (several minutes)
   → reads fixture.json's journal.passes
     → false: POST zk-proof-webhook  { status: "not_qualified" }  — never publishes a proof of NOT saving consistently
     → true:  npx tsx verify_onchain_consistent_saving.ts  → submits on-chain
@@ -481,15 +484,19 @@ VITE_AGENT_SERVER_URL=https://propulsor-production.up.railway.app
 
 Generation runs on GitHub Actions, not Railway or Supabase (see [Feature 2](#feature-2--proof-of-consistent-saving) for why). Required, beyond the `VITE_` vars above:
 
+Lovable Cloud never exposes `SUPABASE_SERVICE_ROLE_KEY` outside its own Edge Functions — it can't be extracted into a GitHub Actions secret. So the RISC Zero host doesn't call the Supabase REST API directly; it reads through `zk-fetch-user-data` (an Edge Function, service_role on the inside, `ZK_WEBHOOK_SECRET`-authenticated on the outside) — the same pattern the Railway agent already uses for `agent-webhook`/`agent-watchlist`.
+
 | Where | Secret | Purpose |
 |---|---|---|
 | Supabase (`request-consistent-saving-proof` function) | `GITHUB_TOKEN` | PAT with `actions:write` on this repo — dispatches the workflow |
 | Supabase (same function) | `GITHUB_REPO` | `owner/repo`, e.g. `Gabrululu/Propulsor` |
-| Supabase (`zk-proof-webhook` function) | `ZK_WEBHOOK_SECRET` | Shared secret the GitHub Actions job authenticates with when reporting back — separate from `AGENT_WEBHOOK_SECRET` so revoking one doesn't affect the other integration |
-| GitHub Actions repo secrets | `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` | Lets the RISC Zero host read `agent_activity` for the requesting user |
+| Supabase (`zk-proof-webhook` and `zk-fetch-user-data` functions) | `ZK_WEBHOOK_SECRET` | Shared secret both functions and the GitHub Actions job authenticate with — separate from `AGENT_WEBHOOK_SECRET` so revoking one doesn't affect the other integration |
+| GitHub Actions repo secrets | `SUPABASE_URL` | Public project URL — used to reach `zk-fetch-user-data` and `zk-proof-webhook` |
 | GitHub Actions repo secrets | `ZK_WEBHOOK_SECRET` | Must match the Supabase one above |
 | GitHub Actions repo secrets | `ZK_SUBMITTER_STELLAR_SECRET` | Funded Testnet keypair that submits the proof on-chain (can reuse `SERVER_STELLAR_SECRET`) |
 | GitHub Actions repo variables | `CONSISTENT_SAVING_VERIFIER_CONTRACT_ID` | Same value as `VITE_CONSISTENT_SAVING_VERIFIER_CONTRACT_ID` above |
+
+Note there's no `SUPABASE_SERVICE_ROLE_KEY` in GitHub Actions at all — it never leaves Supabase.
 
 ---
 

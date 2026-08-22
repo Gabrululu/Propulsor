@@ -37,7 +37,10 @@ jobs:
         env:
           USER_ID: ${{ inputs.user_id }}
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          # Lovable Cloud never exposes SUPABASE_SERVICE_ROLE_KEY outside its
+          # own Edge Functions — the host reads via zk-fetch-user-data
+          # instead, authenticated with this shared secret.
+          ZK_WEBHOOK_SECRET: ${{ secrets.ZK_WEBHOOK_SECRET }}
         run: cargo run --release -p host
 
       - name: Check whether the user qualifies
