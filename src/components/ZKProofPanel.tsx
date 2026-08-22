@@ -77,7 +77,7 @@ function signalToFr32(signal: string): string {
 }
 
 function hexToScBytesN(hex: string): xdr.ScVal {
-  return xdr.ScVal.scvBytes(hexToBytes(hex));
+  return xdr.ScVal.scvBytes(hexToBytes(hex) as unknown as Parameters<typeof xdr.ScVal.scvBytes>[0]);
 }
 
 // ── Component ─────────────────────────────────────────────────────────────
@@ -111,7 +111,7 @@ const ZKProofPanel = () => {
     try {
       // 1. Fetch vault_2 balance from Soroban (stays in browser, never sent anywhere)
       setState({ status: "fetching-balance" });
-      const balances = await contracts.getBalances(publicKey);
+      const balances = await contracts.getBalances();
       const vault2 = balances.find(b => b.vault_id === 2);
       const balanceStroops = vault2?.balance ?? 0n;
 
@@ -300,7 +300,7 @@ const ZKProofPanel = () => {
             <span className="text-sm text-foreground font-mono">{stepMsg(state)}</span>
           </div>
           <div className="bg-muted rounded-sm p-3 font-mono text-[0.65rem] text-muted-foreground leading-6 space-y-1">
-            <p className={state.status !== "idle" ? "text-secondary" : "opacity-40"}>
+            <p className="text-secondary">
               {state.status === "fetching-balance" ? "▸" : "✓"} Leyendo tu bóveda de ahorro...
             </p>
             <p className={

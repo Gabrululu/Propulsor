@@ -37,7 +37,9 @@ export interface AccountBalances {
 export async function getAccountBalance(publicKey: string): Promise<AccountBalances> {
   try {
     const server = await getHorizonServer();
-    const account = await server.loadAccount(publicKey);
+    const account = (await server.loadAccount(publicKey)) as {
+      balances: Array<{ asset_type: string; balance: string; asset_code?: string; asset_issuer?: string }>;
+    };
     let xlm = 0;
     let usdc = 0;
 
