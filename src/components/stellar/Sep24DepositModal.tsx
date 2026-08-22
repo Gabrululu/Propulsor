@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useWallet } from "@/lib/stellar/WalletContext";
 import { useSep24Deposit } from "@/hooks/useSep24Deposit";
 import { STELLAR_EXPLORER_BASE, SEP24_HOME_DOMAIN } from "@/lib/stellar/client";
@@ -15,6 +15,16 @@ const Sep24DepositModal = () => {
   const [formError, setFormError] = useState("");
 
   const isCustodial = mode === "custodial";
+  const openedTxRef = useRef<string | null>(null);
+
+  // The anchor sends X-Frame-Options: deny, so its hosted form can't render
+  // in an iframe — open it in a new tab instead, once per transaction.
+  useEffect(() => {
+    if (state.status === "interactive" && openedTxRef.current !== state.transactionId) {
+      openedTxRef.current = state.transactionId;
+      window.open(state.url, "_blank", "noopener,noreferrer");
+    }
+  }, [state]);
 
   if (!publicKey) return null;
 
@@ -134,19 +144,24 @@ const Sep24DepositModal = () => {
               </div>
             )}
 
-            {/* Interactive step: the anchor's hosted KYC/deposit form */}
+            {/* Interactive step: the anchor's hosted KYC/deposit form opens in its own tab */}
             {(state.status === "interactive" || state.status === "polling") && (
               <div className="space-y-3">
                 <p className="text-xs text-body-muted">
                   {state.status === "interactive"
-                    ? "Completa el formulario de abajo. El estado se actualiza automáticamente."
+                    ? "Abrimos el formulario del proveedor de pagos en una pestaña nueva. Complétalo ahí — esta ventana se actualiza sola cuando termines."
                     : `Formulario enviado — confirmando tu depósito (estado: ${state.anchorStatus})...`}
                 </p>
-                <iframe
-                  src={state.url}
-                  title="Depósito"
-                  className="w-full h-[480px] rounded-sm border border-border bg-white"
-                />
+                {state.status === "interactive" && (
+                  <a
+                    href={state.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="btn-outline-pink block w-full rounded-sm text-sm py-2.5 text-center"
+                  >
+                    ¿No se abrió? Abrir formulario de depósito →
+                  </a>
+                )}
                 <div className="flex items-center gap-2 text-[0.65rem] font-mono text-muted-foreground">
                   <div className="w-2 h-2 rounded-full bg-secondary animate-pulse" />
                   Consultando estado cada 3s · comprobante {state.transactionId.slice(0, 8)}...

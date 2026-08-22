@@ -2,8 +2,9 @@
  * useSep24Deposit — drives the SEP-24 fiat on-ramp deposit flow.
  *
  * State machine: idle → authenticating (SEP-10) → initiating (SEP-24 session)
- * → interactive (hosted form shown to the user, e.g. in an iframe) → polling
- * (form submitted, waiting on the anchor/bank) → completed | error.
+ * → interactive (hosted form opened in a new tab — anchors block iframing via
+ * X-Frame-Options) → polling (form submitted, waiting on the anchor/bank)
+ * → completed | error.
  *
  * Usage:
  *   const { state, startDeposit, reset } = useSep24Deposit();
