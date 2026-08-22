@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { SUPABASE_URL } from "@/lib/supabase/config";
 
@@ -56,6 +56,10 @@ export function useVoice() {
     setIsSpeaking(false);
   }, []);
 
+  // Stop any in-flight speech when the consuming component unmounts (e.g.
+  // navigating away mid-narration) so audio doesn't keep playing in the background.
+  useEffect(() => stop, [stop]);
+
   const speak = useCallback(
     async (text: string) => {
       if (!text.trim()) return;
@@ -66,6 +70,11 @@ export function useVoice() {
       if (document.hidden) return;
 
       setIsSpeaking(true);
+      // Any failure of the cloud voice (no session, tts function error, empty
+      // audio, network error) falls back to the browser's built-in voice
+      // rather than going silent — this is an accessibility feature, so it
+      // should always say something if it can.
+      const fallback = () => speakWithBrowser(text, () => setIsSpeaking(false));
 
       try {
         let blob = audioCache.get(text);
@@ -74,7 +83,7 @@ export function useVoice() {
           // Use the current user's session JWT — the anon key alone doesn't
           // identify a specific user for the tts function to authorize against.
           const { data: { session } } = await supabase.auth.getSession();
-          if (!session?.access_token) return; // Not authenticated, fail silently
+          if (!session?.access_token) return fallback();
 
           const response = await fetch(`${SUPABASE_URL}/functions/v1/tts`, {
             method: "POST",
@@ -85,42 +94,36 @@ export function useVoice() {
             body: JSON.stringify({ text }),
           });
 
-          if (!response.ok) return; // Fail silently
+          if (!response.ok) return fallback();
 
           blob = await response.blob();
-          if (blob.size === 0) return;
+          if (blob.size === 0) return fallback();
 
           audioCache.set(text, blob);
         }
 
-        if (blob) {
-          // ElevenLabs audio
-          const url = URL.createObjectURL(blob);
-          urlRef.current = url;
-          const audio = new Audio(url);
-          audioRef.current = audio;
+        // ElevenLabs audio
+        const url = URL.createObjectURL(blob);
+        urlRef.current = url;
+        const audio = new Audio(url);
+        audioRef.current = audio;
 
-          audio.onended = () => {
-            setIsSpeaking(false);
-            URL.revokeObjectURL(url);
-            urlRef.current = null;
-            audioRef.current = null;
-          };
-          audio.onerror = () => {
-            setIsSpeaking(false);
-            URL.revokeObjectURL(url);
-            urlRef.current = null;
-            audioRef.current = null;
-          };
+        audio.onended = () => {
+          setIsSpeaking(false);
+          URL.revokeObjectURL(url);
+          urlRef.current = null;
+          audioRef.current = null;
+        };
+        audio.onerror = () => {
+          setIsSpeaking(false);
+          URL.revokeObjectURL(url);
+          urlRef.current = null;
+          audioRef.current = null;
+        };
 
-          await audio.play();
-        } else {
-          // Fallback: browser speech synthesis
-          speakWithBrowser(text, () => setIsSpeaking(false));
-        }
+        await audio.play();
       } catch {
-        // Last resort: browser synthesis
-        speakWithBrowser(text, () => setIsSpeaking(false));
+        fallback();
       }
     },
     [stop]

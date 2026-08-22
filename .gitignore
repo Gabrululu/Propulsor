@@ -14,6 +14,7 @@ agent/dist
 agent/.env
 agent/.env.*
 !agent/.env.example
+!agent/.env.monitor.example
 
 # ── Logs ──────────────────────────────────────────────────────────────────────
 logs

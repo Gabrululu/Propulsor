@@ -24,11 +24,16 @@ function timeAgo(iso: string | null | undefined): string {
 }
 
 const AgentStatusCard = () => {
-  const { isOnline, agentAddress, isConfigured, loading: healthLoading } = useAgentStatus();
+  const { isOnline, agentAddress, loading: healthLoading } = useAgentStatus();
   const { status, loading: statusLoading } = useAgentActivity();
 
   const loading = healthLoading || statusLoading;
-  const isActive = isOnline || status?.is_active;
+  // "Activo" requires a monitor to have actually reported watching *this*
+  // account (agent_status.is_active, set by the Railway monitor's webhook
+  // calls). The payment server responding to /health (isOnline) only proves
+  // the split engine is reachable — it says nothing about whether anything
+  // is watching this specific wallet, so it must not be conflated with "Activo".
+  const isActive = Boolean(status?.is_active);
 
   return (
     <div
@@ -56,7 +61,7 @@ const AgentStatusCard = () => {
         ) : (
           <span className="flex items-center gap-1.5 font-mono text-xs text-body-muted">
             <span className="w-1.5 h-1.5 rounded-full bg-body-muted inline-block" />
-            {isConfigured ? "Offline" : "No configurado"}
+            {isOnline ? "Sin vigilancia" : "No disponible"}
           </span>
         )}
       </div>
@@ -65,9 +70,9 @@ const AgentStatusCard = () => {
       <p className="text-body-muted text-xs font-mono mb-4 leading-relaxed">
         {isActive
           ? "Tu dinero está protegido en el momento en que llega. El agente detecta cada remesa y hace el reparto antes de que llegue cualquier presión externa."
-          : isConfigured
-          ? "El agente automático no está disponible en este momento. El reparto automático está temporalmente deshabilitado."
-          : "El agente automático todavía no está activado para tu cuenta."}
+          : isOnline
+          ? "El motor de pagos está disponible, pero todavía no hay confirmación de que un agente esté vigilando tu cuenta — el reparto automático no se ejecutará hasta que eso ocurra."
+          : "El agente automático no está disponible en este momento."}
       </p>
 
       {/* ── Stats row (from agent_status) ────────────────────── */}
@@ -124,7 +129,7 @@ const AgentStatusCard = () => {
       </div>
 
       {/* ── Footer: agent address + watched account ──────────── */}
-      {(isActive && (agentAddress || status?.watched_account)) && (
+      {(agentAddress || status?.watched_account) && (
         <div className="flex items-center gap-3 mt-3 pt-3 border-t border-pink-subtle flex-wrap">
           {agentAddress && (
             <>
