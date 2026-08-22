@@ -1,13 +1,19 @@
 /**
  * monitor.ts — Autonomous agent for Propulsor
  *
- * Watches a Stellar account for incoming USDC payments via Horizon streaming.
- * When a payment arrives, it autonomously calls the x402-protected
- * /execute-split endpoint — paying the 0.01 USDC fee itself — and logs
- * the on-chain vault breakdown.
+ * Watches Stellar Testnet for incoming USDC payments to *any* Propulsor
+ * user's account, and when one arrives, autonomously calls the
+ * x402-protected /execute-split endpoint — paying the 0.01 USDC fee itself
+ * — and logs the on-chain vault breakdown.
+ *
+ * This is a single process that serves every user: it opens one global
+ * Horizon payment stream (not scoped to one account) and filters incoming
+ * payments against a watchlist of Stellar public keys fetched from Supabase
+ * (via the agent-watchlist Edge Function) and refreshed on an interval, so
+ * a newly onboarded user is picked up automatically without redeploying.
  *
  * Usage:
- *   WATCHED_ACCOUNT=G... AGENT_SECRET=S... npm run monitor
+ *   AGENT_SECRET=S... SUPABASE_URL=... AGENT_WEBHOOK_SECRET=... npm run monitor
  */
 
 import { EventSource } from 'eventsource';
@@ -34,21 +40,27 @@ const AGENT_SERVER_URL = process.env.AGENT_SERVER_URL ?? 'http://localhost:3001'
 const USDC_CODE = 'USDC';
 const USDC_ISSUER = 'GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5';
 const RECONNECT_DELAY_MS = 5_000;
+const WATCHLIST_REFRESH_MS = 60_000;
 
-const WATCHED_ACCOUNT = process.env.WATCHED_ACCOUNT ?? '';
 const AGENT_SECRET = process.env.AGENT_SECRET ?? process.env.SERVER_STELLAR_SECRET ?? '';
+const SUPABASE_URL = process.env.SUPABASE_URL ?? '';
+const AGENT_WEBHOOK_SECRET = process.env.AGENT_WEBHOOK_SECRET ?? '';
 
 // vault_2 (savings) Blend integration — optional.
 // If set, vault_2's USDC allocation is deposited into Blend after every split.
 const VAULT2_PUBLIC_KEY = process.env.VAULT2_PUBLIC_KEY ?? '';
 const VAULT2_SECRET = process.env.VAULT2_SECRET ?? '';
 
-if (!WATCHED_ACCOUNT) {
-  console.error('[monitor] ERROR: WATCHED_ACCOUNT env variable is required.');
-  process.exit(1);
-}
 if (!AGENT_SECRET) {
   console.error('[monitor] ERROR: AGENT_SECRET (or SERVER_STELLAR_SECRET) env variable is required.');
+  process.exit(1);
+}
+if (!SUPABASE_URL || !AGENT_WEBHOOK_SECRET) {
+  console.error(
+    '[monitor] ERROR: SUPABASE_URL and AGENT_WEBHOOK_SECRET are required — the monitor has no ' +
+    'other way to know which accounts to watch (see agent-watchlist Edge Function) or to report ' +
+    'activity back to the dashboard.'
+  );
   process.exit(1);
 }
 
@@ -67,6 +79,49 @@ function logSection(title: string) {
   console.log('\n' + '─'.repeat(60));
   console.log(`  ${title}`);
   console.log('─'.repeat(60));
+}
+
+// ---------------------------------------------------------------------------
+// Watchlist — the set of Stellar accounts to react to, refreshed from
+// Supabase on an interval so new users are picked up without a redeploy.
+// ---------------------------------------------------------------------------
+
+const watchedAccounts = new Set<string>();
+
+async function refreshWatchlist(): Promise<void> {
+  try {
+    const res = await fetch(`${SUPABASE_URL}/functions/v1/agent-watchlist`, {
+      headers: { Authorization: `Bearer ${AGENT_WEBHOOK_SECRET}` },
+    });
+
+    if (!res.ok) {
+      log(`[watchlist] Refresh failed: HTTP ${res.status}`);
+      return;
+    }
+
+    const { accounts } = (await res.json()) as { accounts: string[] };
+
+    const added = accounts.filter((a) => !watchedAccounts.has(a));
+    const removed = [...watchedAccounts].filter((a) => !accounts.includes(a));
+
+    for (const a of added) {
+      watchedAccounts.add(a);
+      log(`[watchlist] + now watching ${a.slice(0, 8)}...`);
+      // Lets that user's dashboard flip to "Activo" immediately, without
+      // waiting for their first payment.
+      void notifyAgentWebhook({ watchedAccount: a, eventType: 'agent_started' });
+    }
+    for (const a of removed) {
+      watchedAccounts.delete(a);
+      log(`[watchlist] - stopped watching ${a.slice(0, 8)}...`);
+    }
+
+    if (added.length || removed.length) {
+      log(`[watchlist] Now watching ${watchedAccounts.size} account(s)`);
+    }
+  } catch (err) {
+    log(`[watchlist] Refresh error: ${err instanceof Error ? err.message : String(err)}`);
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -146,7 +201,7 @@ async function callExecuteSplitWithPayment(
 }
 
 // ---------------------------------------------------------------------------
-// Horizon payment stream
+// Horizon payment stream — global, filtered against the dynamic watchlist
 // ---------------------------------------------------------------------------
 
 type HorizonPayment = {
@@ -166,24 +221,23 @@ function isUsdcPayment(payment: HorizonPayment): boolean {
     payment.asset_type !== 'native' &&
     payment.asset_code === USDC_CODE &&
     payment.asset_issuer === USDC_ISSUER &&
-    payment.to === WATCHED_ACCOUNT
+    watchedAccounts.has(payment.to)
   );
 }
 
 function startStream(): () => void {
   const server = new Horizon.Server(HORIZON_URL);
 
-  log(`[stream] Watching ${WATCHED_ACCOUNT.slice(0, 8)}... for incoming USDC on Stellar Testnet`);
+  log('[stream] Watching all Stellar Testnet USDC payments, filtered against the live watchlist');
 
   const stopStream = server
     .payments()
-    .forAccount(WATCHED_ACCOUNT)
     .cursor('now')
     .stream({
       onmessage: async (payment: unknown) => {
         const p = payment as HorizonPayment;
 
-        if (!isUsdcPayment(p)) return; // ignore non-USDC or outgoing
+        if (!isUsdcPayment(p)) return; // ignore non-USDC, outgoing, or unwatched accounts
 
         logSection('USDC PAYMENT DETECTED');
         log(`  From:    ${p.from}`);
@@ -209,10 +263,10 @@ function startStream(): () => void {
             log(`    Vault ${vault.vaultId}: ${vault.balance} stroops  (${usdcAmount} USDC)`);
           }
           // ── Notify agent-webhook so the dashboard status card updates ────
-          // (this also records the split in the user's transaction history —
-          // the agent has no service_role access, so the Edge Function does it)
+          // watchedAccount is the actual recipient of this payment (p.to), not
+          // a fixed account — agent-webhook resolves it to the right user.
           await notifyAgentWebhook({
-            watchedAccount: WATCHED_ACCOUNT,
+            watchedAccount: p.to,
             eventType: 'split_executed',
             amountUsdc: incomeAmount / 10_000_000,
             txHash: result.txHash,
@@ -243,7 +297,7 @@ function startStream(): () => void {
                 log(`  bTokens received:   ${blendResult.blendTokensReceived}`);
 
                 await notifyAgentWebhook({
-                  watchedAccount: WATCHED_ACCOUNT,
+                  watchedAccount: p.to,
                   eventType: 'blend_deposited',
                   amountUsdc: vault2Stroops / 10_000_000,
                   blendTxHash: blendResult.txHash,
@@ -264,7 +318,7 @@ function startStream(): () => void {
           log('');
 
           await notifyAgentWebhook({
-            watchedAccount: WATCHED_ACCOUNT,
+            watchedAccount: p.to,
             eventType: 'agent_error',
             errorMessage: message,
           });
@@ -286,20 +340,26 @@ function startStream(): () => void {
 // Start
 // ---------------------------------------------------------------------------
 
-logSection('PROPULSOR AUTONOMOUS AGENT — STARTING');
-log(`  Watching account:  ${WATCHED_ACCOUNT}`);
-log(`  Agent address:     ${agentAddress}`);
-log(`  x402 server:       ${AGENT_SERVER_URL}`);
-log(`  USDC issuer:       ${USDC_ISSUER.slice(0, 8)}...`);
-log(`  Network:           Stellar Testnet`);
-log(`  Blend deposit:     ${VAULT2_SECRET && VAULT2_PUBLIC_KEY ? `enabled (vault_2 = ${VAULT2_PUBLIC_KEY.slice(0, 8)}...)` : 'disabled (set VAULT2_PUBLIC_KEY + VAULT2_SECRET to enable)'}`);
-log('');
-log('Waiting for incoming USDC payments...');
-log('');
+async function main() {
+  logSection('PROPULSOR AUTONOMOUS AGENT — STARTING');
+  log(`  Agent address:     ${agentAddress}`);
+  log(`  x402 server:       ${AGENT_SERVER_URL}`);
+  log(`  USDC issuer:       ${USDC_ISSUER.slice(0, 8)}...`);
+  log(`  Network:           Stellar Testnet`);
+  log(`  Blend deposit:     ${VAULT2_SECRET && VAULT2_PUBLIC_KEY ? `enabled (vault_2 = ${VAULT2_PUBLIC_KEY.slice(0, 8)}...)` : 'disabled (set VAULT2_PUBLIC_KEY + VAULT2_SECRET to enable)'}`);
+  log('');
 
-void notifyAgentWebhook({ watchedAccount: WATCHED_ACCOUNT, eventType: 'agent_started' });
+  await refreshWatchlist();
+  log(`  Watching:          ${watchedAccounts.size} account(s) (refreshed every ${WATCHLIST_REFRESH_MS / 1000}s)`);
+  log('');
+  log('Waiting for incoming USDC payments...');
+  log('');
 
-startStream();
+  setInterval(refreshWatchlist, WATCHLIST_REFRESH_MS);
+  startStream();
+}
+
+void main();
 
 // Handle graceful shutdown
 process.on('SIGINT', () => {

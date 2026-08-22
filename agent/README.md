@@ -122,20 +122,31 @@ This registers the 60/30/10 split rules on-chain under the server's address.
    ```bash
    supabase functions deploy agent-proxy
    supabase functions deploy agent-webhook
+   supabase functions deploy agent-watchlist
    ```
 4. Add to your frontend `.env`:
    ```env
    VITE_AGENT_SERVER_URL=https://propulsor-agent.railway.app
    ```
 
-### Step E — Deploy monitor as worker (optional)
+### Step E — Deploy the monitor as a worker (required for auto-splits)
 
-The monitor can run as a Railway worker service alongside the server:
+The monitor is what actually detects deposits — without it, splits never run
+automatically. It's a **separate Railway service** from the payment server,
+and unlike the server it is not optional: it's what makes the whole
+"deposit → auto-split" flow work for every user, not just a single hardcoded
+account (see `.env.monitor.example` for the full rationale and variable list).
 
-1. In Railway → **Add Service → Empty Service**
+1. In Railway → **Add Service → GitHub Repo** (same repo)
 2. Set Root Directory to `/agent`
-3. Set **Start Command** to `node dist/monitor.js`
-4. Add environment variables: `WATCHED_ACCOUNT`, `AGENT_SECRET`, plus all server vars
+3. Set **Custom Start Command** to `node dist/monitor.js`
+4. Set **Healthcheck Path** to empty — this process has no HTTP server and
+   can never answer a healthcheck; leaving one configured makes Railway
+   mark every deploy as failed.
+5. Add environment variables from `.env.monitor.example`: `AGENT_SECRET`,
+   `AGENT_SERVER_URL`, `SUPABASE_URL`, `AGENT_WEBHOOK_SECRET` (plus optional
+   Blend vars). There is no per-account variable — the monitor discovers
+   every user's account dynamically (see below).
 
 ---
 
@@ -264,24 +275,30 @@ If no payment header is provided, the middleware returns `402 Payment Required`:
 
 ## Autonomous Monitor Agent
 
-`src/monitor.ts` is an autonomous agent that watches a Stellar account for incoming USDC payments and automatically triggers the split contract via the x402-protected endpoint.
+`src/monitor.ts` is an autonomous agent that watches Stellar Testnet for incoming USDC payments to **any** Propulsor user's account and automatically triggers the split contract via the x402-protected endpoint. One deployed process serves every user — it is not pinned to a single hardcoded account.
 
 ### How it works
 
 ```
-Horizon stream → USDC payment detected on WATCHED_ACCOUNT
+Every 60s: GET agent-watchlist → refresh the set of accounts to react to
+  (one Stellar public key per user who has finished wallet setup)
+
+Horizon stream (global, no .forAccount filter)
+  → USDC payment detected, payment.to is in the watchlist
   → POST /execute-split (no payment)  ← 402 Payment Required
   → agent signs 0.01 USDC payment with its own keypair
   → POST /execute-split (X-PAYMENT header)
   → split executed on-chain
   → logs txHash + vault breakdown
-  → writes to `transactions` table (if Supabase configured)
-  → notifies `agent-webhook` (if AGENT_WEBHOOK_SECRET set) → dashboard status card updates live
+  → notifies `agent-webhook` with watchedAccount = payment.to
+    → resolves to the right user → dashboard status card + activity feed update live
 ```
 
-The monitor also notifies `agent-webhook` on startup (`agent_started`) and on split failures (`agent_error`), so the dashboard's Agent status card reflects whether the agent is actually running — not just whether the last split succeeded.
+Watching Stellar's payment stream globally and filtering in-process (rather than opening one Horizon stream per user) is what lets a single process cover an unbounded number of users without spawning more Railway services as Propulsor grows.
 
-### Running the monitor
+The monitor also notifies `agent-webhook` for every account newly added to the watchlist (`agent_started`) and on split failures (`agent_error`), so each user's dashboard reflects whether the agent is actually watching their account — not just whether their last split succeeded.
+
+### Running the monitor locally
 
 **Terminal 1** — start the server:
 ```bash
@@ -290,24 +307,24 @@ npm run dev
 
 **Terminal 2** — start the monitor:
 ```bash
-WATCHED_ACCOUNT=G<user-public-key> npm run monitor
+npm run monitor
 ```
 
-The `AGENT_SECRET` defaults to `SERVER_STELLAR_SECRET` from `.env`. To use a different keypair for paying x402 fees:
-```bash
-WATCHED_ACCOUNT=G<user-key> AGENT_SECRET=S<agent-secret> npm run monitor
-```
+`AGENT_SECRET` defaults to `SERVER_STELLAR_SECRET` from `.env`. `SUPABASE_URL` and `AGENT_WEBHOOK_SECRET` are required — without them the monitor has no way to fetch the watchlist or report activity, so it exits immediately with a clear error.
 
 ### Environment variables
 
 | Variable | Default | Description |
 |---|---|---|
-| `WATCHED_ACCOUNT` | *(required)* | Stellar public key to watch for incoming USDC |
 | `AGENT_SECRET` | `SERVER_STELLAR_SECRET` | Keypair that pays the 0.01 USDC x402 fee |
 | `AGENT_SERVER_URL` | `http://localhost:3001` | URL of the running agent server |
+| `SUPABASE_URL` | *(required)* | Used to call `agent-watchlist` (GET) and `agent-webhook` (POST) |
+| `AGENT_WEBHOOK_SECRET` | *(required)* | Shared secret with both Edge Functions above |
 | `VAULT2_PUBLIC_KEY` | *(optional)* | Stellar public key of the vault_2 (savings) account |
 | `VAULT2_SECRET` | *(optional)* | Stellar secret key of the vault_2 account (must hold USDC) |
 | `BLEND_POOL_ID` | *(see Blend setup)* | Blend lending pool contract ID on Stellar Testnet |
+
+See `.env.monitor.example` for a ready-to-copy template with deployment steps.
 
 ### Sample console output
 
@@ -315,8 +332,8 @@ WATCHED_ACCOUNT=G<user-key> AGENT_SECRET=S<agent-secret> npm run monitor
 ──────────────────────────────────────────────────────────
   PROPULSOR AUTONOMOUS AGENT — STARTING
 ──────────────────────────────────────────────────────────
-[2026-04-10T...] Watching account:  GBM5FC...
 [2026-04-10T...] Agent address:     GBM5FC...
+[2026-04-10T...] Watching:          3 account(s) (refreshed every 60s)
 [2026-04-10T...] Waiting for incoming USDC payments...
 
 ──────────────────────────────────────────────────────────

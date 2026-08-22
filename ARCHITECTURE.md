@@ -72,14 +72,17 @@ cp .env.example .env
 Minimum required variables:
 
 ```env
-SERVER_STELLAR_SECRET=S...   # keypair from Step 1 (server + agent)
-WATCHED_ACCOUNT=G...         # Stellar address to watch for USDC payments
+SERVER_STELLAR_SECRET=S...     # keypair from Step 1 (server + agent)
+SUPABASE_URL=https://...       # monitor: fetches the watchlist + reports activity
+AGENT_WEBHOOK_SECRET=...       # monitor: shared secret with agent-watchlist/agent-webhook
 
 # Optional — enables automatic Blend yield on vault_2
 VAULT2_PUBLIC_KEY=G...
 VAULT2_SECRET=S...
-BLEND_POOL_ID=C...           # get from testnet.blend.capital
+BLEND_POOL_ID=C...             # get from testnet.blend.capital
 ```
+
+The monitor watches Stellar Testnet globally and reacts to any payment sent to a known user account — it fetches that account list from Supabase (`agent-watchlist`, refreshed every 60s) rather than being pinned to one hardcoded `WATCHED_ACCOUNT`, so one deployment covers every user.
 
 See [`agent/README.md`](./agent/README.md) for the full variable reference and Blend setup instructions.
 
