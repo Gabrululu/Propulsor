@@ -1,0 +1,95 @@
+name: Generate Consistent-Saving ZK Proof
+
+# Triggered by the request-consistent-saving-proof Edge Function when a user
+# asks for a Proof-of-Consistent-Saving. Runs on ubuntu-latest specifically
+# because RISC Zero's Groth16 STARK-to-SNARK wrapper needs Docker — Railway
+# (where the rest of Propulsor's backend runs) blocks Docker-in-Docker, so
+# this can't live there. See zk/risc0/README.md for why.
+on:
+  workflow_dispatch:
+    inputs:
+      user_id:
+        description: "Propulsor user_id (uuid) to generate the proof for"
+        required: true
+      job_id:
+        description: "zk_proof_jobs row id to report status back to"
+        required: true
+
+jobs:
+  generate-and-submit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Install RISC Zero toolchain
+        run: |
+          curl -L https://risczero.com/install | bash
+          echo "$HOME/.risc0/bin" >> "$GITHUB_PATH"
+
+      - name: rzup install
+        run: rzup install
+
+      - name: Generate Groth16 proof (RISC Zero host — several minutes)
+        working-directory: zk/risc0/consistent_saving
+        env:
+          USER_ID: ${{ inputs.user_id }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: cargo run --release -p host
+
+      - name: Check whether the user qualifies
+        id: check
+        working-directory: zk/risc0/consistent_saving
+        run: |
+          passes=$(jq -r '.journal.passes' fixture.json)
+          months=$(jq -r '.journal.months_with_saving' fixture.json)
+          threshold=$(jq -r '.journal.threshold_months' fixture.json)
+          echo "passes=$passes" >> "$GITHUB_OUTPUT"
+          echo "months=$months" >> "$GITHUB_OUTPUT"
+          echo "threshold=$threshold" >> "$GITHUB_OUTPUT"
+
+      # Not qualifying is a real, expected outcome — never publish a proof of
+      # NOT having saved consistently. Report it privately and stop here.
+      - name: Report "not qualified" (skips on-chain submission)
+        if: steps.check.outputs.passes != 'true'
+        run: |
+          curl -sf -X POST "${{ secrets.SUPABASE_URL }}/functions/v1/zk-proof-webhook" \
+            -H "Authorization: Bearer ${{ secrets.ZK_WEBHOOK_SECRET }}" \
+            -H "Content-Type: application/json" \
+            -d "{\"job_id\":\"${{ inputs.job_id }}\",\"status\":\"not_qualified\",\"months_with_saving\":${{ steps.check.outputs.months }},\"threshold_months\":${{ steps.check.outputs.threshold }}}"
+
+      - uses: actions/setup-node@v4
+        if: steps.check.outputs.passes == 'true'
+        with:
+          node-version: 20
+
+      - name: Submit proof on-chain
+        if: steps.check.outputs.passes == 'true'
+        working-directory: zk
+        env:
+          JOB_ID: ${{ inputs.job_id }}
+          STELLAR_SECRET: ${{ secrets.ZK_SUBMITTER_STELLAR_SECRET }}
+          CONSISTENT_SAVING_VERIFIER_CONTRACT_ID: ${{ vars.CONSISTENT_SAVING_VERIFIER_CONTRACT_ID }}
+        run: |
+          npm install
+          npx tsx scripts/verify_onchain_consistent_saving.ts \
+            --fixture risc0/consistent_saving/fixture.json
+
+      - name: Report success to the dashboard
+        if: steps.check.outputs.passes == 'true'
+        run: |
+          curl -sf -X POST "${{ secrets.SUPABASE_URL }}/functions/v1/zk-proof-webhook" \
+            -H "Authorization: Bearer ${{ secrets.ZK_WEBHOOK_SECRET }}" \
+            -H "Content-Type: application/json" \
+            -d @zk/submission_result.json
+
+      - name: Report failure to the dashboard
+        if: failure()
+        run: |
+          curl -sf -X POST "${{ secrets.SUPABASE_URL }}/functions/v1/zk-proof-webhook" \
+            -H "Authorization: Bearer ${{ secrets.ZK_WEBHOOK_SECRET }}" \
+            -H "Content-Type: application/json" \
+            -d "{\"job_id\":\"${{ inputs.job_id }}\",\"status\":\"error\",\"error_message\":\"Workflow failed — see the Actions run log\"}"

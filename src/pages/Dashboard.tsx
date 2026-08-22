@@ -6,6 +6,7 @@ import TxRow from "@/components/TxRow";
 import AgentStatusCard from "@/components/agent/AgentStatusCard";
 import AgentActivityFeed from "@/components/agent/AgentActivityFeed";
 import ZKProofPanel from "@/components/ZKProofPanel";
+import ConsistentSavingProofPanel from "@/components/ConsistentSavingProofPanel";
 import { useStellarBalance } from "@/hooks/useStellarBalance";
 import { useAgentStatus } from "@/hooks/useAgentStatus";
 import { getHorizonServer } from "@/lib/stellar/client";
@@ -325,6 +326,7 @@ const Dashboard = () => {
 
         {/* ZK Privacy Layer */}
         <ZKProofPanel />
+        <ConsistentSavingProofPanel />
 
         {/* Agent manual trigger — only when agent server is online */}
         {agentOnline && (

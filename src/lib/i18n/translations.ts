@@ -14,7 +14,7 @@ export const translations = {
       titleLine2: "HERRAMIENTA DE",
       titleLine3: "INDEPENDENCIA.",
       description:
-        "Separa, protege y ahorra tu dinero automáticamente con bóvedas inteligentes en Stellar. Sin banco. Sin permiso. Solo tú.",
+        "Separa, protege y ahorra tu dinero automáticamente con bóvedas inteligentes. Sin banco. Sin permiso. Solo tú.",
       stat1Value: "7 de 10",
       stat1Label: "trabajadores informales en LATAM sin cuenta bancaria propia",
       stat2Label: "Fee por transacción en Stellar",

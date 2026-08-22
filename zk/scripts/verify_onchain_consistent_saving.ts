@@ -36,7 +36,7 @@ import {
   BASE_FEE,
   scValToNative,
 } from "@stellar/stellar-sdk";
-import { readFileSync } from "fs";
+import { readFileSync, writeFileSync } from "fs";
 import { join, dirname } from "path";
 import { fileURLToPath } from "url";
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -168,6 +168,24 @@ async function main() {
   console.log(`  Stellar txHash : ${sendResult.hash}`);
   console.log(`  Nullifier      : ${Buffer.from(nullifier).toString("hex")}`);
   console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+
+  // When run from the generate-consistent-saving-proof.yml CI job (JOB_ID
+  // set), write a result file the workflow forwards to zk-proof-webhook so
+  // the dashboard's zk_proof_jobs row updates. No-op for manual CLI use.
+  const jobId = process.env.JOB_ID;
+  if (jobId) {
+    writeFileSync(
+      "submission_result.json",
+      JSON.stringify({
+        job_id: jobId,
+        status: "done",
+        months_with_saving: fixture.journal.months_with_saving,
+        threshold_months: fixture.journal.threshold_months,
+        proof_hash: Buffer.from(nullifier).toString("hex"),
+        tx_hash: sendResult.hash,
+      }),
+    );
+  }
 }
 
 main().catch(err => { console.error("✗", err.message); process.exit(1); });

@@ -18,6 +18,7 @@ import AuthCallback from "./pages/AuthCallback";
 import ResetPassword from "./pages/ResetPassword";
 import NotFound from "./pages/NotFound";
 import VerifyProof from "./pages/VerifyProof";
+import VerifyConsistentSavingProof from "./pages/VerifyConsistentSavingProof";
 
 const queryClient = new QueryClient();
 
@@ -49,6 +50,7 @@ const App = () => (
                 <Route path="/dashboard/transacciones" element={<ProtectedRoute><Transacciones /></ProtectedRoute>} />
                 <Route path="/dashboard/configuracion" element={<ProtectedRoute><Configuracion /></ProtectedRoute>} />
                 <Route path="/verify/:proofHash" element={<VerifyProof />} />
+                <Route path="/verify-saving/:proofHash" element={<VerifyConsistentSavingProof />} />
                 <Route path="*" element={<NotFound />} />
               </Routes>
             </BrowserRouter>

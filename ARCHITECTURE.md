@@ -268,6 +268,26 @@ Proves a user has completed splits in ≥ 6 distinct months out of the last 12, 
 
 **Deployed contract (Testnet):** `ConsistentSavingVerifier` → `CDBUSPDUC4AYSWPVCX5QQLRVFJUEJDW3BTZ5EOVH77TCJXW3CKC5X6KQ`. Live, initialized with RISC Zero's published Groth16 VK and the `consistent_saving` guest's image ID. A real proof (7/12 qualifying months, synthetic data) was submitted and accepted on-chain: txHash `cb367fecf701cd9a798835d662a711e96cc67c2ad333c36f753a0fed5c32f70d`, nullifier `42f0536fe0a87502d13058db3c717246af7b7199165efa4123d5d9b3a6f07b39` — `get_proof` confirms the stored `ProofRecord` decodes to `months_with_saving=7, threshold_months=6`, matching the guest's real input exactly.
 
+**Frontend integration (added 2026-08-22):** `ConsistentSavingProofPanel.tsx` (Dashboard) lets a user request a proof, and `VerifyConsistentSavingProof.tsx` (`/verify-saving/:proofHash`) is the public verification page — same pattern as Feature 1's `ZKProofPanel`/`VerifyProof`, with one structural difference: **generation cannot run in the browser or on Railway.** RISC Zero's Groth16 "wrap" step shells out to Docker (`zk/risc0/README.md`), and Railway blocks Docker-in-Docker outright. So generation runs asynchronously on a GitHub Actions runner instead:
+
+```
+ConsistentSavingProofPanel → POST request-consistent-saving-proof (Edge Function)
+  → inserts a `zk_proof_jobs` row (status: queued)
+  → dispatches .github/workflows/generate-consistent-saving-proof.yml via the GitHub API
+
+GitHub Actions (ubuntu-latest, has Docker)
+  → cargo run --release -p host   (RISC Zero proving, several minutes)
+  → reads fixture.json's journal.passes
+    → false: POST zk-proof-webhook  { status: "not_qualified" }  — never publishes a proof of NOT saving consistently
+    → true:  npx tsx verify_onchain_consistent_saving.ts  → submits on-chain
+             → POST zk-proof-webhook  { status: "done", proof_hash, tx_hash, ... }
+
+zk-proof-webhook → updates the zk_proof_jobs row
+  → ConsistentSavingProofPanel's Supabase realtime subscription updates live
+```
+
+See [Environment Variables → Backend secrets for Proof-of-Consistent-Saving generation](#backend-secrets-for-proof-of-consistent-saving-generation) for the full secret list this pipeline needs across Supabase and GitHub.
+
 > **Note (checked 2026-08-21):** the code comments here used to say this is "waiting on CAP-0074 (Protocol 26)" — that was stale. [CAP-0074](https://github.com/stellar/stellar-protocol/blob/master/core/cap-0074.md) (host functions for BN254: `bn254_g1_add`, `bn254_g1_mul`, `bn254_multi_pairing_check`) reached **Final** status and actually shipped in **Protocol 25 ("X-Ray")** — live on Testnet since Jan 7, 2026 and Mainnet since Jan 22, 2026. The network is on Protocol 27 as of this writing, so the host functions have been available for 7+ months. The on-chain verifier contract described above now exists.
 
 ### Generate a Proof Locally (CLI)
@@ -426,7 +446,8 @@ VoiceConfirmation.tsx — Post-split audio feedback
 | `/dashboard/bovadas` | Vault management | Protected |
 | `/dashboard/transacciones` | Transaction history (local + Stellar) | Protected |
 | `/dashboard/configuracion` | Profile, PIN, voice preferences | Protected |
-| `/verify/:proofHash` | Public ZK proof verification | Public |
+| `/verify/:proofHash` | Public ZK proof verification (Proof-of-Vault) | Public |
+| `/verify-saving/:proofHash` | Public ZK proof verification (Proof-of-Consistent-Saving) | Public |
 
 ---
 
@@ -450,7 +471,25 @@ VITE_SOROBAN_RPC_URL=https://soroban-testnet.stellar.org
 VITE_SPLIT_CONTRACT_ID=CCRH4EPUVIPESWYWOWPQ2QK3XN6KBR3RY6UFK36A4MXKKXIFH6ONRTVY
 VITE_VAULT_CONTRACT_ID=CC73UGT72A2MOZOSK6WFWMMIL32OJPJSPKEBFNBLK2GZJYNORERTSSWX
 VITE_ZK_VERIFIER_CONTRACT_ID=CAGUCQUMNSOJALPFM3A2T2TBDIDCFUDY3UQA6JIWAN4ZP3COPQ7HP7BU
+VITE_CONSISTENT_SAVING_VERIFIER_CONTRACT_ID=CDBUSPDUC4AYSWPVCX5QQLRVFJUEJDW3BTZ5EOVH77TCJXW3CKC5X6KQ
+
+# Autonomous agent server URL (Railway)
+VITE_AGENT_SERVER_URL=https://propulsor-production.up.railway.app
 ```
+
+### Backend secrets for Proof-of-Consistent-Saving generation
+
+Generation runs on GitHub Actions, not Railway or Supabase (see [Feature 2](#feature-2--proof-of-consistent-saving) for why). Required, beyond the `VITE_` vars above:
+
+| Where | Secret | Purpose |
+|---|---|---|
+| Supabase (`request-consistent-saving-proof` function) | `GITHUB_TOKEN` | PAT with `actions:write` on this repo — dispatches the workflow |
+| Supabase (same function) | `GITHUB_REPO` | `owner/repo`, e.g. `Gabrululu/Propulsor` |
+| Supabase (`zk-proof-webhook` function) | `ZK_WEBHOOK_SECRET` | Shared secret the GitHub Actions job authenticates with when reporting back — separate from `AGENT_WEBHOOK_SECRET` so revoking one doesn't affect the other integration |
+| GitHub Actions repo secrets | `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` | Lets the RISC Zero host read `agent_activity` for the requesting user |
+| GitHub Actions repo secrets | `ZK_WEBHOOK_SECRET` | Must match the Supabase one above |
+| GitHub Actions repo secrets | `ZK_SUBMITTER_STELLAR_SECRET` | Funded Testnet keypair that submits the proof on-chain (can reuse `SERVER_STELLAR_SECRET`) |
+| GitHub Actions repo variables | `CONSISTENT_SAVING_VERIFIER_CONTRACT_ID` | Same value as `VITE_CONSISTENT_SAVING_VERIFIER_CONTRACT_ID` above |
 
 ---
 
@@ -508,6 +547,21 @@ split_rules (
   percentage      integer,
   updated_at      timestamptz DEFAULT now()
 )
+
+-- Proof-of-Consistent-Saving generation jobs (async — see Feature 2 below)
+zk_proof_jobs (
+  id                 uuid PRIMARY KEY,
+  user_id            uuid REFERENCES users_profile,
+  proof_type         text DEFAULT 'consistent_saving',
+  status             enum('queued','done','not_qualified','error'),
+  months_with_saving integer,
+  threshold_months   integer,
+  proof_hash         text,
+  tx_hash            text,
+  error_message      text,
+  created_at         timestamptz DEFAULT now(),
+  updated_at         timestamptz DEFAULT now()
+)
 ```
 
 ---
@@ -522,3 +576,4 @@ split_rules (
 | Stellar Mainnet | Pending | Contracts and agent are mainnet-ready; keypair + anchor coordination outstanding |
 | Blend withdrawal | Not implemented | Deposit-only for the demo scope; withdrawal follows the same `submit()` pattern |
 | ZK trusted setup | Dev-only ceremony | See [Trusted Setup Notice](#feature-1--proof-of-vault) above |
+| Per-user on-chain identity | **Pending decision — not started** | `execute_split` always runs with the server's own address as `user` (`agent/src/server.ts` → `runSplit`), so every user's vault balances are pooled under one demo address on-chain; only the off-chain bookkeeping (`agent_activity`/`agent_status`/`transactions` in Supabase) is correctly split per user today. Giving each user their own on-chain identity while keeping the agent fully autonomous (no live user signature per split) requires Soroban's Protocol 27 delegated-auth feature (CAP-0071 `delegate_account_auth`), but that only works if the user's account is a Soroban **contract** account — Propulsor's users are classic Ed25519 G-accounts. The CAP that would add a delegated signer to an existing G-account without migrating it (CAP-0072) is still an unaccepted **Draft with no protocol version assigned** — not usable. So today this would mean migrating every user from a G-account to a custom account contract and writing its `__check_auth` logic ourselves (CAP-0071 provides no built-in per-function/per-amount scoping or expiration — that's on us to implement), plus possibly wrapping the agent itself in a minimal contract account since delegates must implement `__check_auth` (unconfirmed — needs a testnet spike). A pre-signed-authorization-entry approach (no migration needed) was also considered and rejected: Soroban auth payloads commit to the exact call arguments, so one signed entry only covers one specific deposit amount, not future deposits of unknown size. Revisit when CAP-0072 ships, or if this needs to hold real money instead of testnet funds. |
