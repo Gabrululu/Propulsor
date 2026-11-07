@@ -21,7 +21,7 @@ interface ConnectModalProps {
   onConnected: (mode: "custodial" | "external", publicKey: string) => void;
 }
 const wallets: { id: WalletId; name: string }[] = [
-  { id: FREIGHTER_ID, name: "Freighter" },
+  { id: FREIGHTER_ID, name: "Varial" },
   { id: XBULL_ID, name: "xBull" },
   { id: ALBEDO_ID, name: "Albedo" },
   { id: LOBSTR_ID, name: "Lobstr" },

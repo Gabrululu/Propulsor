@@ -1,6 +1,6 @@
 /**
  * Stellar Wallets Kit — lightweight abstraction
- * Supports: Freighter (extension), xBull (extension), Albedo (web), Lobstr (extension)
+ * Supports: Varial (extension), xBull (extension), Albedo (web), Lobstr (extension)
  * Pattern matches @creit.tech/stellar-wallets-kit API without native USB deps
  */
 
@@ -37,45 +37,45 @@ export interface WalletModule {
   signTransaction: (txXdr: string, opts: { networkPassphrase: string; address: string }) => Promise<string>;
 }
 
-// ── Freighter Module ────────────────────────────────────────
-function createFreighterModule(): WalletModule {
+// ── Varial Module ────────────────────────────────────────
+function createVarialModule(): WalletModule {
   return {
     id: FREIGHTER_ID,
-    name: "Freighter",
-    icon: "🚀",
+    name: "Varial",
+    icon: "V",
     async isAvailable() {
       try {
-        const freighter = await import("@stellar/freighter-api");
-        const result = await freighter.isConnected();
+        const walletApi = await import("@stellar/freighter-api");
+        const result = await walletApi.isConnected();
         return !!result;
       } catch {
         return false;
       }
     },
     async requestAccess() {
-      const freighter = await import("@stellar/freighter-api");
-      const result = await freighter.requestAccess();
+      const walletApi = await import("@stellar/freighter-api");
+      const result = await walletApi.requestAccess();
       if ("error" in result) throw new Error(result.error);
       // requestAccess can return empty string if user hasn't signed in yet
       if (!result.address) {
         // Retry with getAddress after access was granted
-        const addrResult = await freighter.getAddress();
+        const addrResult = await walletApi.getAddress();
         if ("error" in addrResult) throw new Error(addrResult.error);
-        if (!addrResult.address) throw new Error("No se obtuvo la dirección de Freighter. Asegúrate de estar logueado en la extensión.");
+        if (!addrResult.address) throw new Error("No se obtuvo la dirección de Varial. Asegúrate de estar logueado en la extensión.");
         return addrResult.address;
       }
       return result.address;
     },
     async getAddress() {
-      const freighter = await import("@stellar/freighter-api");
-      const result = await freighter.getAddress();
+      const walletApi = await import("@stellar/freighter-api");
+      const result = await walletApi.getAddress();
       if ("error" in result) throw new Error(result.error);
-      if (!result.address) throw new Error("Freighter no devolvió una dirección. Inicia sesión en la extensión primero.");
+      if (!result.address) throw new Error("Varial no devolvió una dirección. Inicia sesión en la extensión primero.");
       return result.address;
     },
     async signTransaction(txXdr, opts) {
-      const freighter = await import("@stellar/freighter-api");
-      const result = await freighter.signTransaction(txXdr, {
+      const walletApi = await import("@stellar/freighter-api");
+      const result = await walletApi.signTransaction(txXdr, {
         networkPassphrase: opts.networkPassphrase,
         address: opts.address,
       });
@@ -207,7 +207,7 @@ export class StellarWalletsKit {
 // ── Default modules (no native deps) ────────────────────────
 export function createDefaultModules(): WalletModule[] {
   return [
-    createFreighterModule(),
+    createVarialModule(),
     createGenericExtensionModule(XBULL_ID, "xBull", "🐂"),
     createAlbedoModule(),
     createGenericExtensionModule(LOBSTR_ID, "Lobstr", "🦞"),

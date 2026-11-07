@@ -3,7 +3,7 @@
  *
  * Handles the two signing paths transparently:
  *   • custodial  → decrypts secret with PIN via loadEncryptedSecret + signCustodial
- *   • external   → delegates to wallet-kit (Freighter, xBull, etc.)
+ *   • external   → delegates to wallet-kit (Varial, xBull, etc.)
  *
  * Usage:
  *   const { getBalances, executeSplit, lockVault, releaseVault } = useContracts();

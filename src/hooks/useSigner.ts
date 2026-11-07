@@ -37,7 +37,7 @@ export function useSigner() {
           // Social accounts use userId as the encryption passphrase (no PIN)
           return signCustodial(txXdr, enc, user.id);
         }
-        // External wallet (Freighter, xBull …)
+        // External wallet (Varial, xBull …)
         return signTransaction(txXdr);
       },
     [mode, user, signTransaction]

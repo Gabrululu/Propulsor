@@ -21,7 +21,7 @@ const stellarWallets: {
   icon: string;
   recommended?: boolean;
 }[] = [
-  { id: FREIGHTER_ID, name: "Freighter", icon: "🚀", recommended: true },
+  { id: FREIGHTER_ID, name: "Varial", icon: "V", recommended: true },
   { id: XBULL_ID, name: "xBull", icon: "🐂" },
   { id: ALBEDO_ID, name: "Albedo", icon: "🌅" },
   { id: LOBSTR_ID, name: "Lobstr", icon: "🦞" },
@@ -174,7 +174,7 @@ const Auth = () => {
   };
 
   const walletInstallUrls: Record<string, string> = {
-    [FREIGHTER_ID]: "https://freighter.app",
+    [FREIGHTER_ID]: "https://varialwallet.com",
     [XBULL_ID]: "https://xbull.app",
     [ALBEDO_ID]: "https://albedo.link",
     [LOBSTR_ID]: "https://lobstr.co",
@@ -270,8 +270,9 @@ const Auth = () => {
       }
     } catch (err: unknown) {
       console.error("Wallet auth error:", err);
-      const msg =
-        err instanceof Error ? err.message : "No se pudo conectar la wallet";
+      const msg = (
+        err instanceof Error ? err.message : "No se pudo conectar la wallet"
+      ).replace(/Freighter/gi, "Varial");
 
       // Friendly messages for common errors
       if (msg.includes("no está instalado") || msg.includes("not installed")) {

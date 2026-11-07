@@ -6,7 +6,7 @@
  *   simulate() → read-only: build + simulate only, no signing
  *
  * State-changing functions accept a `SignFn` callback so they work with
- * both custodial (PIN-based) and external (Freighter/xBull) wallets.
+ * both custodial (PIN-based) and external (Varial/xBull) wallets.
  */
 
 import * as S from "@stellar/stellar-sdk";
