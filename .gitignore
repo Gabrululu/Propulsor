@@ -66,3 +66,12 @@ Thumbs.db
 *.njsproj
 *.sln
 *.sw?
+
+# Browser test output
+playwright-report/
+test-results/
+
+# Local documentation and browser tests
+/docs/
+/e2e/
+/playwright.config.ts

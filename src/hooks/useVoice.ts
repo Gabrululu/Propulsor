@@ -1,26 +1,33 @@
 import { useState, useRef, useCallback, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { useLanguage } from "@/lib/i18n/LanguageContext";
 import { SUPABASE_URL } from "@/lib/supabase/config";
 
 const audioCache = new Map<string, Blob>();
 
 // Browser speech synthesis fallback (no API key required)
-function speakWithBrowser(text: string, onEnd: () => void): void {
-  if (!window.speechSynthesis) { onEnd(); return; }
+function speakWithBrowser(
+  text: string,
+  language: string,
+  onEnd: () => void,
+): void {
+  if (!window.speechSynthesis) {
+    onEnd();
+    return;
+  }
 
   window.speechSynthesis.cancel();
 
   const utter = new SpeechSynthesisUtterance(text);
-  utter.lang = "es-ES";
-  utter.rate = 0.95;
-  utter.pitch = 1;
-
-  // Prefer a Spanish female voice if available
+  const locale = language === "en" ? "en-US" : "es-PE";
   const voices = window.speechSynthesis.getVoices();
-  const spanishFemale = voices.find(
-    (v) => v.lang.startsWith("es") && v.name.toLowerCase().includes("female")
-  ) ?? voices.find((v) => v.lang.startsWith("es"));
-  if (spanishFemale) utter.voice = spanishFemale;
+  const voice =
+    voices.find((v) => v.lang === locale) ??
+    voices.find((v) => v.lang === (language === "en" ? "en-GB" : "es-MX")) ??
+    voices.find((v) => v.lang.startsWith(language));
+  utter.lang = voice?.lang ?? locale;
+  utter.rate = 0.95;
+  if (voice) utter.voice = voice;
 
   utter.onend = onEnd;
   utter.onerror = onEnd;
@@ -38,11 +45,14 @@ function isVoiceEnabled(): boolean {
 }
 
 export function useVoice() {
+  const { language } = useLanguage();
   const [isSpeaking, setIsSpeaking] = useState(false);
+  const generationRef = useRef(0);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const urlRef = useRef<string | null>(null);
 
   const stop = useCallback(() => {
+    generationRef.current++;
     if (audioRef.current) {
       audioRef.current.pause();
       audioRef.current.currentTime = 0;
@@ -66,6 +76,8 @@ export function useVoice() {
       if (!isVoiceEnabled()) return;
 
       stop();
+      const generation = generationRef.current;
+      const active = () => generationRef.current === generation;
 
       if (document.hidden) return;
 
@@ -74,7 +86,12 @@ export function useVoice() {
       // audio, network error) falls back to the browser's built-in voice
       // rather than going silent — this is an accessibility feature, so it
       // should always say something if it can.
-      const fallback = () => speakWithBrowser(text, () => setIsSpeaking(false));
+      const fallback = () => {
+        if (active())
+          speakWithBrowser(text, language, () => {
+            if (active()) setIsSpeaking(false);
+          });
+      };
 
       try {
         let blob = audioCache.get(text);
@@ -82,7 +99,10 @@ export function useVoice() {
         if (!blob) {
           // Use the current user's session JWT — the anon key alone doesn't
           // identify a specific user for the tts function to authorize against.
-          const { data: { session } } = await supabase.auth.getSession();
+          const {
+            data: { session },
+          } = await supabase.auth.getSession();
+          if (!active()) return;
           if (!session?.access_token) return fallback();
 
           const response = await fetch(`${SUPABASE_URL}/functions/v1/tts`, {
@@ -94,9 +114,11 @@ export function useVoice() {
             body: JSON.stringify({ text }),
           });
 
+          if (!active()) return;
           if (!response.ok) return fallback();
 
           blob = await response.blob();
+          if (!active()) return;
           if (blob.size === 0) return fallback();
 
           audioCache.set(text, blob);
@@ -109,12 +131,14 @@ export function useVoice() {
         audioRef.current = audio;
 
         audio.onended = () => {
+          if (!active()) return;
           setIsSpeaking(false);
           URL.revokeObjectURL(url);
           urlRef.current = null;
           audioRef.current = null;
         };
         audio.onerror = () => {
+          if (!active()) return;
           setIsSpeaking(false);
           URL.revokeObjectURL(url);
           urlRef.current = null;
@@ -126,7 +150,7 @@ export function useVoice() {
         fallback();
       }
     },
-    [stop]
+    [stop, language],
   );
 
   return { speak, stop, isSpeaking };

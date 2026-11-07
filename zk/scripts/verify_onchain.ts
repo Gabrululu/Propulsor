@@ -5,7 +5,7 @@
  * calls ProofOfVaultVerifier.verify_proof(), and prints the proof hash.
  *
  * Usage:
- *   npx tsx scripts/verify_onchain.ts \
+ *   pnpm exec tsx scripts/verify_onchain.ts \
  *     --secret S... \
  *     --contract C...
  *

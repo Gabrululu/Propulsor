@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useLanguage } from "@/lib/i18n/LanguageContext";
 
 interface PercentageSliderProps {
   values: number[];
@@ -13,29 +13,32 @@ const colorBg: Record<string, string> = {
   "pink-soft": "#e8a0b4",
 };
 
-const PercentageSlider = ({ values, labels, colors, onChange }: PercentageSliderProps) => {
+const PercentageSlider = ({
+  values,
+  labels,
+  colors,
+  onChange,
+}: PercentageSliderProps) => {
+  const { language } = useLanguage();
   const handleChange = (index: number, newVal: number) => {
-    const clamped = Math.max(0, Math.min(100, newVal));
-    const diff = clamped - values[index];
+    const clamped = Math.max(1, Math.min(98, newVal));
     const otherIndices = values.map((_, i) => i).filter((i) => i !== index);
-    const otherSum = otherIndices.reduce((s, i) => s + values[i], 0);
-
-    if (otherSum === 0 && diff > 0) return;
-
     const newValues = [...values];
     newValues[index] = clamped;
-
-    otherIndices.forEach((i) => {
-      const proportion = otherSum > 0 ? values[i] / otherSum : 1 / otherIndices.length;
-      newValues[i] = Math.max(0, Math.round(values[i] - diff * proportion));
+    let remaining = 100 - clamped - otherIndices.length;
+    let weight = otherIndices.reduce((sum, i) => sum + values[i], 0);
+    otherIndices.forEach((i, position) => {
+      const extra =
+        position === otherIndices.length - 1
+          ? remaining
+          : Math.min(
+              remaining,
+              Math.max(0, Math.round((remaining * values[i]) / weight)),
+            );
+      newValues[i] = 1 + extra;
+      remaining -= extra;
+      weight -= values[i];
     });
-
-    // Ensure sum is exactly 100
-    const sum = newValues.reduce((a, b) => a + b, 0);
-    if (sum !== 100) {
-      const lastOther = otherIndices[otherIndices.length - 1];
-      newValues[lastOther] += 100 - sum;
-    }
 
     onChange(newValues);
   };
@@ -46,22 +49,32 @@ const PercentageSlider = ({ values, labels, colors, onChange }: PercentageSlider
         <div key={i} className="space-y-2">
           <div className="flex justify-between items-center">
             <span className="text-sm text-foreground">{labels[i]}</span>
-            <span className="font-mono text-sm" style={{ color: colorBg[colors[i]] }}>
+            <span
+              className="font-mono text-sm"
+              style={{ color: colorBg[colors[i]] }}
+            >
               {val}%
             </span>
           </div>
           <input
+            aria-label={labels[i]}
+            aria-valuetext={`${val}%; S/${val} ${language === "es" ? "por cada S/100" : "per S/100"}`}
             type="range"
-            min={0}
-            max={100}
+            min={1}
+            max={98}
             value={val}
             onChange={(e) => handleChange(i, parseInt(e.target.value))}
-            className="w-full h-1.5 rounded-sm appearance-none cursor-pointer"
+            className="w-full h-11 rounded-sm cursor-pointer"
             style={{
               background: `linear-gradient(to right, ${colorBg[colors[i]]} ${val}%, #2e2729 ${val}%)`,
               accentColor: colorBg[colors[i]],
             }}
           />
+          <p className="text-sm text-muted-foreground">
+            {language === "es"
+              ? `Si recibes S/100 → S/${val} para ${labels[i]}`
+              : `If you receive S/100 → S/${val} for ${labels[i]}`}
+          </p>
         </div>
       ))}
 

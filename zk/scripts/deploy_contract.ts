@@ -4,7 +4,7 @@
  * Uploads WASM then deploys atomically with constructor args (admin + VK).
  *
  * Usage:
- *   npx tsx scripts/deploy_contract.ts --secret S...
+ *   pnpm exec tsx scripts/deploy_contract.ts --secret S...
  *
  * Environment variables:
  *   STELLAR_SECRET — deployer account

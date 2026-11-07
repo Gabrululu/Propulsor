@@ -90,15 +90,15 @@ See [`agent/README.md`](./agent/README.md) for the full variable reference and B
 
 ```bash
 cd agent
-npm install
-npm run setup     # one-time: register split rules on-chain (60/30/10)
+pnpm install --frozen-lockfile
+pnpm run setup     # one-time: register split rules on-chain (60/30/10)
 ```
 
 Then in two terminals:
 
 ```bash
-npm run dev       # terminal 1 — x402-protected split server
-npm run monitor   # terminal 2 — autonomous payment monitor
+pnpm run dev       # terminal 1 — x402-protected split server
+pnpm run monitor   # terminal 2 — autonomous payment monitor
 ```
 
 **Expected output after a USDC payment arrives:**
@@ -282,7 +282,7 @@ GitHub Actions (ubuntu-latest, has Docker)
       → RISC Zero proving (several minutes)
   → reads fixture.json's journal.passes
     → false: POST zk-proof-webhook  { status: "not_qualified" }  — never publishes a proof of NOT saving consistently
-    → true:  npx tsx verify_onchain_consistent_saving.ts  → submits on-chain
+    → true:  pnpm exec tsx verify_onchain_consistent_saving.ts  → submits on-chain
              → POST zk-proof-webhook  { status: "done", proof_hash, tx_hash, ... }
 
 zk-proof-webhook → updates the zk_proof_jobs row
@@ -307,19 +307,19 @@ cp circuit.zkey ../../../public/zk/circuit.zkey
 # 3. Encode VK for the Soroban contract
 cd ../../
 pnpm install
-npx tsx scripts/encode_vk.ts     # outputs zk/scripts/vk_encoded.json
+pnpm exec tsx scripts/encode_vk.ts     # outputs zk/scripts/vk_encoded.json
 
 # 4. Build + deploy the verifier contract with __constructor (Protocol 22)
 cd contracts/proof_of_vault_verifier
 stellar contract build
 cd ../../
-STELLAR_SECRET=S... npx tsx scripts/deploy_contract.ts
+STELLAR_SECRET=S... pnpm exec tsx scripts/deploy_contract.ts
 # → copy the contract ID to VITE_ZK_VERIFIER_CONTRACT_ID in .env
 # (deploys and initializes with the VK atomically — no separate init step needed)
 
 # 5. Generate + verify a proof via CLI (the UI does this automatically)
-npx tsx scripts/generate_proof.ts --balance 1000000000 --threshold 500000000
-STELLAR_SECRET=S... VERIFIER_CONTRACT_ID=C... npx tsx scripts/verify_onchain.ts
+pnpm exec tsx scripts/generate_proof.ts --balance 1000000000 --threshold 500000000
+STELLAR_SECRET=S... VERIFIER_CONTRACT_ID=C... pnpm exec tsx scripts/verify_onchain.ts
 ```
 
 ### Generate a Consistent-Saving Proof Locally (CLI)
@@ -340,20 +340,20 @@ SUPABASE_URL=... SUPABASE_KEY=... USER_ID=... cargo run --release
 # 2. Encode RISC Zero's published VK for the Soroban contract (one-time —
 #    this VK is fixed, not per-application; no new trusted setup)
 cd ../../../
-npm install
-npx tsx scripts/encode_risc0_vk.ts   # outputs zk/scripts/vk_risc0_encoded.json
+pnpm install --frozen-lockfile
+pnpm exec tsx scripts/encode_risc0_vk.ts   # outputs zk/scripts/vk_risc0_encoded.json
 
 # 3. Build + deploy ConsistentSavingVerifier with __constructor (Protocol 22)
 cd contracts/consistent_saving_verifier
 cargo build --target wasm32v1-none --release
 cd ../../
-STELLAR_SECRET=S... npx tsx scripts/deploy_consistent_saving_verifier.ts
+STELLAR_SECRET=S... pnpm exec tsx scripts/deploy_consistent_saving_verifier.ts
 # → copy the contract ID to VITE_CONSISTENT_SAVING_VERIFIER_CONTRACT_ID in .env
 # (image_id defaults to fixture.json's image_id_hex — pass --image-id to override)
 
 # 4. Submit the fixture's proof on-chain
 STELLAR_SECRET=S... CONSISTENT_SAVING_VERIFIER_CONTRACT_ID=C... \
-  npx tsx scripts/verify_onchain_consistent_saving.ts
+  pnpm exec tsx scripts/verify_onchain_consistent_saving.ts
 ```
 
 ---

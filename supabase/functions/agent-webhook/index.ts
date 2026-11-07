@@ -158,7 +158,7 @@ serve(async (req) => {
           updates.total_splits = (current.total_splits ?? 0) + 1;
         }
         if (body.event_type === "blend_deposited" && body.amount_usdc) {
-          updates.total_yield_usdc = (Number(current.total_yield_usdc) ?? 0) + body.amount_usdc;
+          updates.total_yield_usdc = Number(current.total_yield_usdc ?? 0) + body.amount_usdc;
         }
         await adminSupabase
           .from("agent_status")

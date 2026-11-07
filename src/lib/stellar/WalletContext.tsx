@@ -7,7 +7,12 @@ import {
   ReactNode,
 } from "react";
 import { kit, FREIGHTER_ID, type WalletId } from "./wallets-kit";
-import { createCustodialAccount, createCustodialAccountNoPin, signCustodial, loadEncryptedSecret } from "./custody";
+import {
+  createCustodialAccount,
+  createCustodialAccountNoPin,
+  signCustodial,
+  loadEncryptedSecret,
+} from "./custody";
 import { NETWORK_PASSPHRASE } from "./client";
 
 // ── Types ───────────────────────────────────────────────────
@@ -74,9 +79,15 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  const persist = useCallback((m: WalletMode, pk: string | null, wId: WalletId | null) => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({ mode: m, publicKey: pk, walletId: wId }));
-  }, []);
+  const persist = useCallback(
+    (m: WalletMode, pk: string | null, wId: WalletId | null) => {
+      localStorage.setItem(
+        STORAGE_KEY,
+        JSON.stringify({ mode: m, publicKey: pk, walletId: wId }),
+      );
+    },
+    [],
+  );
 
   // ── Custodial connect ───────────────────────────────────
   const connectCustodial = useCallback(
@@ -93,7 +104,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         setIsConnecting(false);
       }
     },
-    [persist]
+    [persist],
   );
 
   // ── Social custodial connect (no PIN) ───────────────────
@@ -101,17 +112,18 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     async (userId: string): Promise<string> => {
       setIsConnecting(true);
       try {
-        const { publicKey: pk } = await createCustodialAccountNoPin(userId);
-        setMode("custodial_social");
+        const { publicKey: pk, mode: restoredMode } =
+          await createCustodialAccountNoPin(userId);
+        setMode(restoredMode);
         setPublicKey(pk);
         setWalletId(null);
-        persist("custodial_social", pk, null);
+        persist(restoredMode, pk, null);
         return pk;
       } finally {
         setIsConnecting(false);
       }
     },
-    [persist]
+    [persist],
   );
 
   // ── External wallet connect ─────────────────────────────
@@ -130,26 +142,31 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         setIsConnecting(false);
       }
     },
-    [persist]
+    [persist],
   );
 
   // ── Reconnect (restore state from known public key) ────
-  const reconnect = useCallback((pk: string, m: WalletMode) => {
-    // Clear stale data if a different user's wallet is stored
-    try {
-      const stored = localStorage.getItem(STORAGE_KEY);
-      if (stored) {
-        const parsed: PersistedWallet = JSON.parse(stored);
-        if (parsed.publicKey && parsed.publicKey !== pk) {
-          localStorage.removeItem(STORAGE_KEY);
+  const reconnect = useCallback(
+    (pk: string, m: WalletMode) => {
+      // Clear stale data if a different user's wallet is stored
+      try {
+        const stored = localStorage.getItem(STORAGE_KEY);
+        if (stored) {
+          const parsed: PersistedWallet = JSON.parse(stored);
+          if (parsed.publicKey && parsed.publicKey !== pk) {
+            localStorage.removeItem(STORAGE_KEY);
+          }
         }
+      } catch {
+        /* ignore */
       }
-    } catch { /* ignore */ }
-    setMode(m);
-    setPublicKey(pk);
-    setWalletId(null);
-    persist(m, pk, null);
-  }, [persist]);
+      setMode(m);
+      setPublicKey(pk);
+      setWalletId(null);
+      persist(m, pk, null);
+    },
+    [persist],
+  );
 
   // ── Disconnect ──────────────────────────────────────────
   const disconnect = useCallback(() => {
@@ -167,8 +184,11 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         // Load encrypted secret from Supabase
         const stored = localStorage.getItem(STORAGE_KEY);
         const userId = stored ? JSON.parse(stored).userId : null;
-        const encryptedSecret = userId ? await loadEncryptedSecret(userId) : null;
-        if (!encryptedSecret) throw new Error("No se encontró la clave cifrada");
+        const encryptedSecret = userId
+          ? await loadEncryptedSecret(userId)
+          : null;
+        if (!encryptedSecret)
+          throw new Error("No se encontró la clave cifrada");
         return signCustodial(txXdr, encryptedSecret, pin);
       }
 
@@ -183,7 +203,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
 
       throw new Error("No hay wallet conectada");
     },
-    [mode, publicKey, walletId]
+    [mode, publicKey, walletId],
   );
 
   return (

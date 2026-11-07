@@ -64,10 +64,15 @@ jobs:
             -H "Content-Type: application/json" \
             -d "{\"job_id\":\"${{ inputs.job_id }}\",\"status\":\"not_qualified\",\"months_with_saving\":${{ steps.check.outputs.months }},\"threshold_months\":${{ steps.check.outputs.threshold }}}"
 
+      - uses: pnpm/action-setup@v4
+        if: steps.check.outputs.passes == 'true'
+        with:
+          version: 10.32.1
+
       - uses: actions/setup-node@v4
         if: steps.check.outputs.passes == 'true'
         with:
-          node-version: 20
+          node-version: 22
 
       - name: Submit proof on-chain
         if: steps.check.outputs.passes == 'true'
@@ -77,8 +82,8 @@ jobs:
           STELLAR_SECRET: ${{ secrets.ZK_SUBMITTER_STELLAR_SECRET }}
           CONSISTENT_SAVING_VERIFIER_CONTRACT_ID: ${{ vars.CONSISTENT_SAVING_VERIFIER_CONTRACT_ID }}
         run: |
-          npm install
-          npx tsx scripts/verify_onchain_consistent_saving.ts \
+          pnpm install --frozen-lockfile
+          pnpm exec tsx scripts/verify_onchain_consistent_saving.ts \
             --fixture risc0/consistent_saving/fixture.json
 
       - name: Report success to the dashboard

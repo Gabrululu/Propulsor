@@ -8,7 +8,7 @@
  * image_id constructor arg and 10-field VK (vs. 6 for the BLS12-381 circuit).
  *
  * Usage:
- *   npx tsx scripts/deploy_consistent_saving_verifier.ts --secret S...
+ *   pnpm exec tsx scripts/deploy_consistent_saving_verifier.ts --secret S...
  *
  * Environment variables:
  *   STELLAR_SECRET — deployer account (becomes the contract's admin)
@@ -16,7 +16,7 @@
  * Prerequisites:
  *   - contracts/consistent_saving_verifier built for wasm32v1-none:
  *       cd zk/contracts/consistent_saving_verifier && cargo build --target wasm32v1-none --release
- *   - zk/scripts/vk_risc0_encoded.json generated (npm run encode-risc0-vk)
+ *   - zk/scripts/vk_risc0_encoded.json generated (pnpm run encode-risc0-vk)
  *   - zk/risc0/consistent_saving/fixture.json present (for image_id_hex) —
  *     produced by `cargo run --release --example crosscheck_fixture` in
  *     zk/risc0/consistent_saving/host/. image_id is a build-time constant of

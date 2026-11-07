@@ -2,7 +2,7 @@
  * initialize_contract.ts — Initialize ProofOfVaultVerifier with the circuit's VK
  *
  * Usage:
- *   npx tsx scripts/initialize_contract.ts \
+ *   pnpm exec tsx scripts/initialize_contract.ts \
  *     --secret S... \
  *     --contract C...
  *

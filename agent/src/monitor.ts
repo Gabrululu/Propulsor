@@ -13,7 +13,7 @@
  * a newly onboarded user is picked up automatically without redeploying.
  *
  * Usage:
- *   AGENT_SECRET=S... SUPABASE_URL=... AGENT_WEBHOOK_SECRET=... npm run monitor
+ *   AGENT_SECRET=S... SUPABASE_URL=... AGENT_WEBHOOK_SECRET=... pnpm run monitor
  */
 
 import { EventSource } from 'eventsource';

@@ -17,7 +17,7 @@
  * unlike encode_vk.ts's g2ToHex (which does need one, for BLS12-381/snarkjs).
  *
  * Usage:
- *   npx tsx scripts/encode_risc0_vk.ts
+ *   pnpm exec tsx scripts/encode_risc0_vk.ts
  *
  * Output: vk_risc0_encoded.json — ready to paste into
  *   ConsistentSavingVerifier.__constructor(admin, vk, image_id)

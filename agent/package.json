@@ -9,10 +9,11 @@
     "monitor": "tsx src/monitor.ts",
     "build": "tsc",
     "start": "node dist/server.js",
-    "setup": "tsx src/setup.ts"
+    "setup": "tsx src/setup.ts",
+    "test:smoke": "pnpm run build && node scripts/smoke.mjs"
   },
   "dependencies": {
-    "@stellar/stellar-sdk": "^14.6.1",
+    "@stellar/stellar-sdk": "^17.4.0",
     "@x402/core": "^2.9.0",
     "@x402/express": "^2.9.0",
     "@x402/stellar": "^2.9.0",
@@ -27,6 +28,7 @@
     "typescript": "^5.4.5"
   },
   "engines": {
-  "node": ">=20.0.0"
-}
+    "node": ">=22.0.0"
+  },
+  "packageManager": "pnpm@10.32.1"
 }
