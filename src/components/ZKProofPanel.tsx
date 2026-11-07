@@ -1,6 +1,7 @@
 import { useState, useCallback } from "react";
-import { useWallet } from "@/lib/stellar/WalletContext";
 import { useContracts } from "@/hooks/useContracts";
+import { useSigner } from "@/hooks/useSigner";
+import { userError } from "@/lib/userErrors";
 import {
   SOROBAN_RPC_URL,
   NETWORK_PASSPHRASE,
@@ -83,10 +84,11 @@ function hexToScBytesN(hex: string): xdr.ScVal {
 // ── Component ─────────────────────────────────────────────────────────────
 
 const ZKProofPanel = () => {
-  const { publicKey, signTransaction, mode } = useWallet();
+  const { publicKey, mode, makeSign } = useSigner();
   const contracts = useContracts();
 
   const [thresholdInput, setThresholdInput] = useState("50");
+  const [pin, setPin] = useState("");
   const [state, setState] = useState<ProofState>({ status: "idle" });
 
   const stepMsg = (s: ProofState): string => {
@@ -107,6 +109,10 @@ const ZKProofPanel = () => {
       return;
     }
     const thresholdStroops = BigInt(Math.round(thresholdUsdc * 1e7));
+    if (mode === "custodial" && pin.length !== 4) {
+      setState({ status: "error", message: "Ingresa tu PIN de 4 dígitos para firmar la prueba" });
+      return;
+    }
 
     try {
       // 1. Fetch vault_2 balance from Soroban (stays in browser, never sent anywhere)
@@ -186,7 +192,8 @@ const ZKProofPanel = () => {
           proofScVal,
           hexToScBytesN(thresholdFr32),
         ))
-        .setTimeout(30)
+        // Leave time to review and confirm in the wallet; 30s failed with tx_too_late
+        .setTimeout(300)
         .build();
 
       const sim = await soroban.simulateTransaction(tx);
@@ -195,7 +202,7 @@ const ZKProofPanel = () => {
       }
 
       const assembled = SorobanRpc.assembleTransaction(tx, sim).build();
-      const signedXdr = await signTransaction(assembled.toXDR());
+      const signedXdr = await makeSign(mode === "custodial" ? pin : undefined)(assembled.toXDR());
       const signedTx = TransactionBuilder.fromXDR(signedXdr, NETWORK_PASSPHRASE);
 
       const sendResult = await soroban.sendTransaction(signedTx);
@@ -227,12 +234,15 @@ const ZKProofPanel = () => {
       });
 
     } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Error desconocido";
       setState({
         status: "error",
-        message: err instanceof Error ? err.message : "Error desconocido",
+        message: message === "INCORRECT_PIN" ? userError(err) : message,
       });
+    } finally {
+      setPin("");
     }
-  }, [publicKey, thresholdInput, contracts, signTransaction]);
+  }, [publicKey, thresholdInput, contracts, makeSign, mode, pin]);
 
   if (!publicKey) return null;
 
@@ -276,6 +286,25 @@ const ZKProofPanel = () => {
               Probarás que tienes al menos ${thresholdInput} USDC en tu bóveda "Meta grande"
             </p>
           </div>
+
+          {mode === "custodial" && (
+            <div>
+              <label htmlFor="zk-proof-pin" className="text-xs text-muted-foreground font-mono uppercase tracking-wider mb-1 block">
+                PIN de confirmación
+              </label>
+              <input
+                id="zk-proof-pin"
+                type="password"
+                inputMode="numeric"
+                autoComplete="off"
+                maxLength={4}
+                value={pin}
+                onChange={e => setPin(e.target.value.replace(/\D/g, ""))}
+                className="w-full bg-muted border border-border rounded-sm px-3 py-2 text-sm font-mono text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+                placeholder="••••"
+              />
+            </div>
+          )}
 
           {state.status === "error" && (
             <div className="p-3 rounded-sm border border-destructive/30 bg-destructive/10">

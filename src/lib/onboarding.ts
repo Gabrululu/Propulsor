@@ -128,6 +128,29 @@ export async function completeDraft(
     );
 }
 
+const onboardedKey = (userId: string) => `propulsor_onboarded:${userId}`;
+
+/**
+ * Whether this browser last saw the user as onboarded. Only used to avoid
+ * blocking on chain reads; hasCompletedOnboarding still revalidates it.
+ */
+export function wasOnboardingComplete(userId: string): boolean {
+  try {
+    return localStorage.getItem(onboardedKey(userId)) === "true";
+  } catch {
+    return false;
+  }
+}
+
+function rememberOnboarding(userId: string, complete: boolean) {
+  try {
+    if (complete) localStorage.setItem(onboardedKey(userId), "true");
+    else localStorage.removeItem(onboardedKey(userId));
+  } catch {
+    // Storage unavailable: the user just waits for the chain read next time
+  }
+}
+
 /** Repair legacy complete flags only after a successful read of chain state. */
 export async function hasCompletedOnboarding(userId: string): Promise<boolean> {
   const { data, error } = await supabase
@@ -136,7 +159,10 @@ export async function hasCompletedOnboarding(userId: string): Promise<boolean> {
     .eq("id", userId)
     .maybeSingle();
   if (error) throw new Error("PROFILE_SAVE_FAILED");
-  if (!data?.onboarding_complete || !data.stellar_public_key) return false;
+  if (!data?.onboarding_complete || !data.stellar_public_key) {
+    rememberOnboarding(userId, false);
+    return false;
+  }
   let rules;
   try {
     rules = await getRulesStrict(data.stellar_public_key);
@@ -163,5 +189,6 @@ export async function hasCompletedOnboarding(userId: string): Promise<boolean> {
       .eq("id", userId);
     if (saveError) throw new Error("PROFILE_SAVE_FAILED");
   }
+  rememberOnboarding(userId, valid);
   return valid;
 }

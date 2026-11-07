@@ -1,6 +1,6 @@
 // RISC Zero host — consistent_saving proof generator
 //
-// Reads split history from Supabase, runs the guest program in the zkVM,
+// Fetches on-chain split history, runs the guest program in the zkVM,
 // and produces a Groth16Receipt (BN254) suitable for on-chain verification —
 // see ../../SPEC.md for exactly how ConsistentSavingVerifier (Soroban)
 // reconstructs the public inputs from (image ID, journal bytes).
@@ -86,9 +86,8 @@ fn main() {
     // Lovable Cloud only injects SUPABASE_SERVICE_ROLE_KEY inside Edge
     // Functions — it can't be extracted into a GitHub Actions secret — so
     // this runner authenticates with ZK_WEBHOOK_SECRET instead, and the
-    // function does the actual service_role-authenticated read of
-    // agent_activity (populated by supabase/functions/agent-webhook on every
-    // split_executed event — see ARCHITECTURE.md → Database Schema).
+    // function resolves the user's Stellar account and reads their split
+    // history from the SplitProtocol contract.
     let client = reqwest::blocking::Client::new();
     let rows: Vec<SupabaseRow> = client
         .get(format!(

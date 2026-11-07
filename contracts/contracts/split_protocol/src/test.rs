@@ -1,7 +1,10 @@
 #![cfg(test)]
 
 use super::*;
-use soroban_sdk::{testutils::Address as _, vec, Address, Env};
+use soroban_sdk::{
+    testutils::{Address as _, Ledger},
+    vec, Address, BytesN, Env,
+};
 
 // ---------------------------------------------------------------------------
 // Shared helpers
@@ -17,6 +20,10 @@ fn make_env() -> (Env, Address) {
 fn register(env: &Env) -> SplitProtocolClient<'_> {
     let id = env.register(SplitProtocol, ());
     SplitProtocolClient::new(env, &id)
+}
+
+fn payment_ref(env: &Env, n: u8) -> BytesN<32> {
+    BytesN::from_array(env, &[n; 32])
 }
 
 fn default_rules(env: &Env) -> soroban_sdk::Vec<SplitRule> {
@@ -254,4 +261,136 @@ fn test_reset_balances() {
 
     client.reset_balances(&user);
     assert!(client.get_balances(&user).is_empty());
+}
+
+// ---------------------------------------------------------------------------
+// Agent authorization
+// ---------------------------------------------------------------------------
+
+#[test]
+fn test_agent_splits_for_the_user_who_authorized_it() {
+    let (env, user) = make_env();
+    let client = register(&env);
+    let agent = Address::generate(&env);
+    client.set_rules(&user, &default_rules(&env));
+    client.authorize_agent(&user, &agent);
+    assert_eq!(client.get_agent(&user), Some(agent.clone()));
+
+    let bals = client.agent_execute_split(&agent, &user, &1_000, &payment_ref(&env, 1));
+
+    assert_eq!(find_balance(&bals, 0), 600);
+    assert_eq!(find_balance(&client.get_balances(&user), 2), 100);
+    assert_eq!(client.get_balances(&agent).len(), 0);
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #7)")]
+fn test_agent_cannot_split_without_authorization() {
+    let (env, user) = make_env();
+    let client = register(&env);
+    client.set_rules(&user, &default_rules(&env));
+    client.agent_execute_split(&Address::generate(&env), &user, &1_000, &payment_ref(&env, 1));
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #7)")]
+fn test_other_agent_cannot_use_an_authorization() {
+    let (env, user) = make_env();
+    let client = register(&env);
+    client.set_rules(&user, &default_rules(&env));
+    client.authorize_agent(&user, &Address::generate(&env));
+    client.agent_execute_split(&Address::generate(&env), &user, &1_000, &payment_ref(&env, 1));
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #7)")]
+fn test_revoked_agent_cannot_split() {
+    let (env, user) = make_env();
+    let client = register(&env);
+    let agent = Address::generate(&env);
+    client.set_rules(&user, &default_rules(&env));
+    client.authorize_agent(&user, &agent);
+    client.revoke_agent(&user);
+    assert_eq!(client.get_agent(&user), None);
+    client.agent_execute_split(&agent, &user, &1_000, &payment_ref(&env, 1));
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #8)")]
+fn test_same_payment_cannot_be_split_twice() {
+    let (env, user) = make_env();
+    let client = register(&env);
+    let agent = Address::generate(&env);
+    client.set_rules(&user, &default_rules(&env));
+    client.authorize_agent(&user, &agent);
+    client.agent_execute_split(&agent, &user, &1_000, &payment_ref(&env, 1));
+    client.agent_execute_split(&agent, &user, &1_000, &payment_ref(&env, 1));
+}
+
+#[test]
+fn test_authorizing_and_agent_split_require_the_right_signer() {
+    let (env, user) = make_env();
+    let client = register(&env);
+    let agent = Address::generate(&env);
+    client.set_rules(&user, &default_rules(&env));
+
+    client.authorize_agent(&user, &agent);
+    assert_eq!(env.auths()[0].0, user);
+
+    client.agent_execute_split(&agent, &user, &1_000, &payment_ref(&env, 1));
+    assert_eq!(env.auths()[0].0, agent);
+}
+
+// ---------------------------------------------------------------------------
+// Split history
+// ---------------------------------------------------------------------------
+
+#[test]
+fn test_history_keeps_largest_split_per_window() {
+    let (env, user) = make_env();
+    let client = register(&env);
+    client.set_rules(&user, &default_rules(&env));
+    env.ledger().set_timestamp(HISTORY_WINDOW_SECS);
+
+    client.execute_split(&user, &100);
+    client.execute_split(&user, &500);
+    client.execute_split(&user, &200);
+    env.ledger().set_timestamp(HISTORY_WINDOW_SECS * 2);
+    client.execute_split(&user, &50);
+
+    let history = client.get_split_history(&user);
+    assert_eq!(history.len(), 2);
+    assert_eq!(history.get(0).unwrap().income, 500);
+    assert_eq!(history.get(1).unwrap().income, 50);
+    assert_eq!(history.get(1).unwrap().timestamp, HISTORY_WINDOW_SECS * 2);
+}
+
+#[test]
+fn test_history_is_bounded_and_drops_the_oldest() {
+    let (env, user) = make_env();
+    let client = register(&env);
+    client.set_rules(&user, &default_rules(&env));
+
+    for window in 1..=(HISTORY_MAX_RECORDS as u64 + 3) {
+        env.ledger().set_timestamp(window * HISTORY_WINDOW_SECS);
+        client.execute_split(&user, &(window as i128));
+    }
+
+    let history = client.get_split_history(&user);
+    assert_eq!(history.len(), HISTORY_MAX_RECORDS);
+    assert_eq!(history.get(0).unwrap().income, 4);
+}
+
+#[test]
+fn test_agent_splits_count_in_the_users_history() {
+    let (env, user) = make_env();
+    let client = register(&env);
+    let agent = Address::generate(&env);
+    client.set_rules(&user, &default_rules(&env));
+    client.authorize_agent(&user, &agent);
+
+    client.agent_execute_split(&agent, &user, &1_000, &payment_ref(&env, 1));
+
+    assert_eq!(client.get_split_history(&user).get(0).unwrap().income, 1_000);
+    assert_eq!(client.get_split_history(&agent).len(), 0);
 }

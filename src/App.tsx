@@ -30,13 +30,13 @@ import NotFound from "./pages/NotFound";
 import VerifyProof from "./pages/VerifyProof";
 import VerifyConsistentSavingProof from "./pages/VerifyConsistentSavingProof";
 
-import { hasCompletedOnboarding } from "@/lib/onboarding";
+import { hasCompletedOnboarding, wasOnboardingComplete } from "@/lib/onboarding";
 import { useLanguage } from "@/lib/i18n/LanguageContext";
 import { userError } from "@/lib/userErrors";
 
 const queryClient = new QueryClient();
 
-function ProtectedRoute({ children }: { children: React.ReactNode }) {
+export function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
   const { pathname } = useLocation();
   const { language } = useLanguage();
@@ -45,17 +45,23 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
     queryKey: ["onboarding", user?.id],
     queryFn: () => hasCompletedOnboarding(user!.id),
     enabled: !!user && !loading && needsSetup,
-    staleTime: 30000,
+    // Known-good users get in at once while this revalidates in the background
+    initialData: () => (user && wasOnboardingComplete(user.id) ? true : undefined),
+    initialDataUpdatedAt: 0,
+    staleTime: 5 * 60_000,
     retry: 1,
   });
   if (user && needsSetup) {
-    if (setup.isPending || setup.isFetching)
+    // Only block while there is no positive answer yet. A background refetch
+    // (e.g. the tab regaining visibility) must not unmount the page, or any
+    // in-progress flow such as a wallet signature loses its state.
+    if (setup.isPending || (setup.isFetching && !setup.data))
       return (
         <main className="p-6" role="status">
           {language === "es" ? "Verificando tu cuenta…" : "Checking your account…"}
         </main>
       );
-    if (setup.isError)
+    if (setup.isError && !setup.data)
       return (
         <main className="p-6">
           <p role="alert">{userError(setup.error, language)}</p>

@@ -8,7 +8,7 @@
  * For local dev add:  http://localhost:5173/auth/callback
  */
 
-import { hasCompletedOnboarding } from "@/lib/onboarding";
+import { hasCompletedOnboarding, wasOnboardingComplete } from "@/lib/onboarding";
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
@@ -41,7 +41,7 @@ const AuthCallback = () => {
           // Returning user — reconnect social wallet state
           setStatus("Bienvenida de vuelta...");
           await connectSocial(user.id); // idempotent: returns existing keys
-          if (await hasCompletedOnboarding(user.id)) {
+          if (wasOnboardingComplete(user.id) || (await hasCompletedOnboarding(user.id))) {
             navigate("/dashboard", { replace: true });
           } else {
             navigate("/onboarding", { replace: true });

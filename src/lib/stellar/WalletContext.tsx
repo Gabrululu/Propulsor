@@ -3,7 +3,6 @@ import {
   useContext,
   useState,
   useCallback,
-  useEffect,
   ReactNode,
 } from "react";
 import { kit, FREIGHTER_ID, type WalletId } from "./wallets-kit";
@@ -42,6 +41,16 @@ interface PersistedWallet {
   walletId: WalletId | null;
 }
 
+function readPersistedWallet(): PersistedWallet | null {
+  try {
+    const stored = localStorage.getItem(STORAGE_KEY);
+    const parsed: PersistedWallet | null = stored ? JSON.parse(stored) : null;
+    return parsed?.publicKey && parsed.mode ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
 // ── Context ─────────────────────────────────────────────────
 
 const WalletContext = createContext<WalletState | null>(null);
@@ -55,29 +64,14 @@ export function useWallet(): WalletState {
 // ── Provider ────────────────────────────────────────────────
 
 export function WalletProvider({ children }: { children: ReactNode }) {
-  const [mode, setMode] = useState<WalletMode>(null);
-  const [publicKey, setPublicKey] = useState<string | null>(null);
-  const [walletId, setWalletId] = useState<WalletId | null>(null);
+  // Restored synchronously so pages have the wallet from their first render
+  const [persisted] = useState(readPersistedWallet);
+  const [mode, setMode] = useState<WalletMode>(persisted?.mode ?? null);
+  const [publicKey, setPublicKey] = useState<string | null>(persisted?.publicKey ?? null);
+  const [walletId, setWalletId] = useState<WalletId | null>(persisted?.walletId ?? null);
   const [isConnecting, setIsConnecting] = useState(false);
 
   const isConnected = !!publicKey && !!mode;
-
-  // Restore persisted connection
-  useEffect(() => {
-    try {
-      const stored = localStorage.getItem(STORAGE_KEY);
-      if (stored) {
-        const parsed: PersistedWallet = JSON.parse(stored);
-        if (parsed.publicKey && parsed.mode) {
-          setMode(parsed.mode);
-          setPublicKey(parsed.publicKey);
-          setWalletId(parsed.walletId);
-        }
-      }
-    } catch {
-      // ignore
-    }
-  }, []);
 
   const persist = useCallback(
     (m: WalletMode, pk: string | null, wId: WalletId | null) => {

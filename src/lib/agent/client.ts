@@ -21,11 +21,12 @@ export interface AgentSplitResult {
 /**
  * Triggers a split via the deployed agent server (proxied through Supabase).
  *
- * @param userPublicKey - The user's Stellar public key (logged in metadata)
+ * The account is resolved server-side from the session, never sent from here.
+ *
  * @param incomeAmount  - Amount in stroops (1 USDC = 10_000_000)
  */
 export async function triggerManualSplit(
-  params: { userPublicKey: string; incomeAmount: number },
+  params: { incomeAmount: number },
   signal?: AbortSignal
 ): Promise<AgentSplitResult> {
   const timeout = setTimeout(() => {}, 0); // keeps TS happy

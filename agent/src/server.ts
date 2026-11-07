@@ -1,8 +1,11 @@
 import 'dotenv/config';
+import { SPLIT_CONTRACT_ID } from './config.js';
+import { createHash, randomBytes } from 'node:crypto';
 import express, { Request, Response } from 'express';
 import { paymentMiddlewareFromConfig } from '@x402/express';
 import { HTTPFacilitatorClient } from '@x402/core/http';
 import { ExactStellarScheme } from '@x402/stellar/exact/server';
+import { verifyIncomingPayment } from './payments.js';
 import {
   Keypair,
   Networks,
@@ -13,6 +16,7 @@ import {
   nativeToScVal,
   scValToNative,
   BASE_FEE,
+  xdr,
 } from '@stellar/stellar-sdk';
 
 // ---------------------------------------------------------------------------
@@ -24,8 +28,7 @@ const NETWORK = 'stellar:testnet';
 const STELLAR_PASSPHRASE = Networks.TESTNET;
 const RPC_URL = process.env.RPC_URL ?? 'https://soroban-testnet.stellar.org';
 const FACILITATOR_URL = process.env.FACILITATOR_URL ?? 'https://www.x402.org/facilitator';
-const CONTRACT_ID =
-  process.env.CONTRACT_ID ?? 'CCRH4EPUVIPESWYWOWPQ2QK3XN6KBR3RY6UFK36A4MXKKXIFH6ONRTVY';
+const CONTRACT_ID = SPLIT_CONTRACT_ID;
 // Token used by the Supabase Edge Function proxy — set INTERNAL_API_KEY in env
 const INTERNAL_API_KEY = process.env.INTERNAL_API_KEY ?? '';
 
@@ -127,7 +130,11 @@ async function waitForTransaction(
 // Core split logic — shared by /execute-split (x402) and /split (bearer)
 // ---------------------------------------------------------------------------
 
-async function runSplit(userPublicKey: string, incomeAmount: number) {
+/**
+ * Splits on behalf of a user. The contract only accepts this if that user
+ * authorized this server's address, and refuses a paymentRef it has seen.
+ */
+async function runSplit(userPublicKey: string, incomeAmount: number, paymentRef: Buffer) {
   const account = await soroban.getAccount(serverAddress);
   const contract = new Contract(CONTRACT_ID);
 
@@ -137,9 +144,11 @@ async function runSplit(userPublicKey: string, incomeAmount: number) {
   })
     .addOperation(
       contract.call(
-        'execute_split',
+        'agent_execute_split',
         Address.fromString(serverAddress).toScVal(),
+        Address.fromString(userPublicKey).toScVal(),
         nativeToScVal(BigInt(Math.floor(incomeAmount)), { type: 'i128' }),
+        xdr.ScVal.scvBytes(paymentRef),
       ),
     )
     .setTimeout(30)
@@ -179,26 +188,41 @@ async function runSplit(userPublicKey: string, incomeAmount: number) {
   return { txHash: sendResult.hash, vaultBreakdown };
 }
 
+/** Contract errors: #7 agent not authorized by the user, #8 payment already split. */
+function splitErrorStatus(message: string): number {
+  if (message.includes('Error(Contract, #7)')) return 403;
+  if (message.includes('Error(Contract, #8)')) return 409;
+  return 500;
+}
+
 // ---------------------------------------------------------------------------
 // POST /execute-split  (x402-protected — costs 0.01 USDC)
 // ---------------------------------------------------------------------------
 
 app.post('/execute-split', async (req: Request, res: Response) => {
-  const { userPublicKey, incomeAmount } = req.body as {
+  const { userPublicKey, paymentId } = req.body as {
     userPublicKey?: string;
-    incomeAmount?: number;
+    paymentId?: string;
   };
 
-  if (!userPublicKey || typeof incomeAmount !== 'number' || incomeAmount <= 0) {
+  if (!userPublicKey || !paymentId) {
     res.status(400).json({
       success: false,
-      error: 'Request body must include userPublicKey (string) and incomeAmount (number > 0)',
+      error: 'Request body must include userPublicKey (string) and paymentId (string)',
     });
     return;
   }
 
   try {
-    const { txHash, vaultBreakdown } = await runSplit(userPublicKey, incomeAmount);
+    // Anyone can pay the x402 fee, so the amount comes from a real incoming
+    // payment on the network, never from the request.
+    const incomeAmount = await verifyIncomingPayment(paymentId, userPublicKey);
+    if (incomeAmount === null) {
+      res.status(422).json({ success: false, error: 'No matching USDC payment to this user' });
+      return;
+    }
+    const paymentRef = createHash('sha256').update(`payment:${paymentId}`).digest();
+    const { txHash, vaultBreakdown } = await runSplit(userPublicKey, incomeAmount, paymentRef);
     console.log(`[execute-split] OK  txHash=${txHash}  user=${userPublicKey}`);
     res.json({
       success: true,
@@ -209,7 +233,7 @@ app.post('/execute-split', async (req: Request, res: Response) => {
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     console.error('[execute-split] Error:', message);
-    res.status(500).json({ success: false, error: message });
+    res.status(splitErrorStatus(message)).json({ success: false, error: message });
   }
 });
 
@@ -246,7 +270,8 @@ app.post('/split', async (req: Request, res: Response) => {
   }
 
   try {
-    const { txHash, vaultBreakdown } = await runSplit(userPublicKey, incomeAmount);
+    // Requested by the authenticated user themselves, through agent-proxy
+    const { txHash, vaultBreakdown } = await runSplit(userPublicKey, incomeAmount, randomBytes(32));
     console.log(`[split] OK  txHash=${txHash}  user=${userPublicKey}`);
     res.json({
       success: true,
@@ -257,7 +282,7 @@ app.post('/split', async (req: Request, res: Response) => {
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     console.error('[split] Error:', message);
-    res.status(500).json({ success: false, error: message });
+    res.status(splitErrorStatus(message)).json({ success: false, error: message });
   }
 });
 

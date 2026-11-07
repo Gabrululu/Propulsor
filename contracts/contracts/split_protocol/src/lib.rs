@@ -2,7 +2,7 @@
 
 use soroban_sdk::{
     contract, contractimpl, contracttype, contracterror, panic_with_error,
-    Address, Env, Symbol, Vec,
+    Address, BytesN, Env, Symbol, Vec,
 };
 
 // ---------------------------------------------------------------------------
@@ -15,6 +15,11 @@ use soroban_sdk::{
 // ---------------------------------------------------------------------------
 const LEDGER_THRESHOLD: u32 = 518_400;   // 30 days
 const LEDGER_EXTEND_TO: u32 = 3_110_400; // 180 days
+
+// Split history keeps one record per 10-day window for a bit over a year, so
+// its size stays bounded no matter how often a user splits.
+const HISTORY_WINDOW_SECS: u64 = 864_000;
+const HISTORY_MAX_RECORDS: u32 = 37;
 
 // ---------------------------------------------------------------------------
 // Data structures
@@ -34,6 +39,14 @@ pub struct VaultBalance {
     pub balance: i128,
 }
 
+/// The largest split a user made in one history window.
+#[contracttype]
+#[derive(Clone)]
+pub struct SplitRecord {
+    pub timestamp: u64,
+    pub income: i128,
+}
+
 // ---------------------------------------------------------------------------
 // Errors
 // ---------------------------------------------------------------------------
@@ -47,6 +60,8 @@ pub enum SplitError {
     InvalidIncome      = 4,
     TooManyRules       = 5,
     InvalidPercentage  = 6, // a single rule's percentage is 0 or > 100
+    AgentNotAuthorized = 7, // caller is not the agent this user authorized
+    PaymentAlreadySplit = 8, // this payment_ref was already split for this user
 }
 
 // ---------------------------------------------------------------------------
@@ -93,6 +108,7 @@ impl SplitProtocol {
             .persistent()
             .extend_ttl(&key, LEDGER_THRESHOLD, LEDGER_EXTEND_TO);
 
+        Self::extend_instance(&env);
         env.events().publish(
             (Symbol::new(&env, "rules_set"), user),
             rules.len(),
@@ -105,30 +121,93 @@ impl SplitProtocol {
     /// so that every stroop of income is always fully distributed.
     pub fn execute_split(env: Env, user: Address, income: i128) -> Vec<VaultBalance> {
         user.require_auth();
+        Self::apply_split(&env, &user, income)
+    }
 
+    /// Let `agent` run splits for `user` until revoked. An agent can only add to
+    /// the user's vault accounting: it cannot change rules, reset or withdraw.
+    pub fn authorize_agent(env: Env, user: Address, agent: Address) {
+        user.require_auth();
+        let key = (Symbol::new(&env, "agent"), user.clone());
+        env.storage().persistent().set(&key, &agent);
+        env.storage()
+            .persistent()
+            .extend_ttl(&key, LEDGER_THRESHOLD, LEDGER_EXTEND_TO);
+        Self::extend_instance(&env);
+        env.events()
+            .publish((Symbol::new(&env, "agent_set"), user), agent);
+    }
+
+    /// Remove the user's agent authorization.
+    pub fn revoke_agent(env: Env, user: Address) {
+        user.require_auth();
+        env.storage()
+            .persistent()
+            .remove(&(Symbol::new(&env, "agent"), user.clone()));
+        env.events()
+            .publish((Symbol::new(&env, "agent_off"), user), 0_u32);
+    }
+
+    /// The agent this user authorized, if any (no auth required).
+    pub fn get_agent(env: Env, user: Address) -> Option<Address> {
+        env.storage()
+            .persistent()
+            .get(&(Symbol::new(&env, "agent"), user))
+    }
+
+    /// Split income on behalf of a user who authorized this agent. `payment_ref`
+    /// identifies what triggered the split and can only be used once per user,
+    /// so a redelivered payment can't be counted twice.
+    pub fn agent_execute_split(
+        env: Env,
+        agent: Address,
+        user: Address,
+        income: i128,
+        payment_ref: BytesN<32>,
+    ) -> Vec<VaultBalance> {
+        agent.require_auth();
+
+        let agent_key = (Symbol::new(&env, "agent"), user.clone());
+        let authorized: Option<Address> = env.storage().persistent().get(&agent_key);
+        if authorized != Some(agent) {
+            panic_with_error!(&env, SplitError::AgentNotAuthorized);
+        }
+        env.storage()
+            .persistent()
+            .extend_ttl(&agent_key, LEDGER_THRESHOLD, LEDGER_EXTEND_TO);
+
+        let ref_key = (Symbol::new(&env, "ref"), user.clone(), payment_ref);
+        if env.storage().persistent().has(&ref_key) {
+            panic_with_error!(&env, SplitError::PaymentAlreadySplit);
+        }
+        env.storage().persistent().set(&ref_key, &true);
+        env.storage()
+            .persistent()
+            .extend_ttl(&ref_key, LEDGER_THRESHOLD, LEDGER_EXTEND_TO);
+
+        Self::apply_split(&env, &user, income)
+    }
+
+    /// Up to a year of the user's splits, oldest first (no auth required).
+    pub fn get_split_history(env: Env, user: Address) -> Vec<SplitRecord> {
+        env.storage()
+            .persistent()
+            .get(&(Symbol::new(&env, "hist"), user))
+            .unwrap_or_else(|| Vec::new(&env))
+    }
+
+    fn apply_split(env: &Env, user: &Address, income: i128) -> Vec<VaultBalance> {
         if income <= 0 {
-            panic_with_error!(&env, SplitError::InvalidIncome);
+            panic_with_error!(env, SplitError::InvalidIncome);
         }
 
-        let sym_rules = Symbol::new(&env, "rules");
-        let sym_bals = Symbol::new(&env, "bals");
+        let rules = Self::load_rules(env, user);
+        if rules.is_empty() {
+            panic_with_error!(env, SplitError::NoRulesSet);
+        }
 
-        let rules_key = (sym_rules, user.clone());
-        let rules: Vec<SplitRule> = match env
-            .storage()
-            .persistent()
-            .get(&rules_key)
-        {
-            Some(r) => r,
-            None => panic_with_error!(&env, SplitError::NoRulesSet),
-        };
-
-        let bals_key = (sym_bals, user.clone());
-        let mut balances: Vec<VaultBalance> = env
-            .storage()
-            .persistent()
-            .get(&bals_key)
-            .unwrap_or_else(|| Vec::new(&env));
+        let bals_key = (Symbol::new(env, "bals"), user.clone());
+        let mut balances = Self::load_balances(env, user);
 
         // FIX #4 — track every stroop distributed to compute remainder.
         let mut total_distributed: i128 = 0;
@@ -137,7 +216,7 @@ impl SplitProtocol {
             let rule = rules.get(i).unwrap();
             let amount = match income.checked_mul(rule.percentage as i128) {
                 Some(v) => v / 100,
-                None => panic_with_error!(&env, SplitError::InvalidIncome),
+                None => panic_with_error!(env, SplitError::InvalidIncome),
             };
             total_distributed += amount;
 
@@ -207,8 +286,11 @@ impl SplitProtocol {
             .persistent()
             .extend_ttl(&bals_key, LEDGER_THRESHOLD, LEDGER_EXTEND_TO);
 
+        Self::record_split(env, user, income);
+        Self::extend_instance(env);
+
         env.events().publish(
-            (Symbol::new(&env, "split_done"), user),
+            (Symbol::new(env, "split_done"), user.clone()),
             income,
         );
 
@@ -217,22 +299,12 @@ impl SplitProtocol {
 
     /// Return current vault balances for a user (no auth required).
     pub fn get_balances(env: Env, user: Address) -> Vec<VaultBalance> {
-        let sym_bals = Symbol::new(&env, "bals");
-        let key = (sym_bals, user);
-        env.storage()
-            .persistent()
-            .get(&key)
-            .unwrap_or_else(|| Vec::new(&env))
+        Self::load_balances(&env, &user)
     }
 
     /// Return stored split rules for a user (no auth required).
     pub fn get_rules(env: Env, user: Address) -> Vec<SplitRule> {
-        let sym_rules = Symbol::new(&env, "rules");
-        let key = (sym_rules, user);
-        env.storage()
-            .persistent()
-            .get(&key)
-            .unwrap_or_else(|| Vec::new(&env))
+        Self::load_rules(&env, &user)
     }
 
     /// Wipe all vault balances for a user (keeps rules intact).
@@ -246,6 +318,56 @@ impl SplitProtocol {
 
         env.events()
             .publish((Symbol::new(&env, "reset"), user), 0_u32);
+    }
+
+    fn load_rules(env: &Env, user: &Address) -> Vec<SplitRule> {
+        env.storage()
+            .persistent()
+            .get(&(Symbol::new(env, "rules"), user.clone()))
+            .unwrap_or_else(|| Vec::new(env))
+    }
+
+    fn load_balances(env: &Env, user: &Address) -> Vec<VaultBalance> {
+        env.storage()
+            .persistent()
+            .get(&(Symbol::new(env, "bals"), user.clone()))
+            .unwrap_or_else(|| Vec::new(env))
+    }
+
+    fn record_split(env: &Env, user: &Address, income: i128) {
+        let key = (Symbol::new(env, "hist"), user.clone());
+        let mut history: Vec<SplitRecord> = env
+            .storage()
+            .persistent()
+            .get(&key)
+            .unwrap_or_else(|| Vec::new(env));
+        let timestamp = env.ledger().timestamp();
+        let record = SplitRecord { timestamp, income };
+
+        match history.last() {
+            Some(last) if last.timestamp / HISTORY_WINDOW_SECS == timestamp / HISTORY_WINDOW_SECS => {
+                if income > last.income {
+                    history.set(history.len() - 1, record);
+                }
+            }
+            _ => {
+                history.push_back(record);
+                if history.len() > HISTORY_MAX_RECORDS {
+                    history.pop_front();
+                }
+            }
+        }
+
+        env.storage().persistent().set(&key, &history);
+        env.storage()
+            .persistent()
+            .extend_ttl(&key, LEDGER_THRESHOLD, LEDGER_EXTEND_TO);
+    }
+
+    fn extend_instance(env: &Env) {
+        env.storage()
+            .instance()
+            .extend_ttl(LEDGER_THRESHOLD, LEDGER_EXTEND_TO);
     }
 }
 

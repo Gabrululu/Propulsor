@@ -108,6 +108,8 @@ interface InvokeResult {
   txHash: string;
 }
 
+const WALLET_SIGNING_WINDOW_S = 300;
+
 async function invoke(
   contractId: string,
   method: string,
@@ -128,7 +130,9 @@ async function invoke(
     networkPassphrase: NETWORK_PASSPHRASE,
   })
     .addOperation(contract.call(method, ...args))
-    .setTimeout(30)
+    // beforeSubmit flows recover an interrupted attempt only once it expires, so
+    // keep that wait short. Everything else leaves time to confirm in a wallet.
+    .setTimeout(beforeSubmit ? 30 : WALLET_SIGNING_WINDOW_S)
     .build();
 
   const sim = await server.simulateTransaction(tx);
@@ -193,7 +197,9 @@ async function simulate(
 ): Promise<S.xdr.ScVal | null> {
   try {
     const server = rpcServer();
-    const account = await server.getAccount(publicKey);
+    // Reads are never submitted, so the sequence number is irrelevant and
+    // fetching the account would only add an RPC round trip per read.
+    const account = new S.Account(publicKey, "0");
     const contract = new S.Contract(contractId);
 
     const tx = new S.TransactionBuilder(account, {
@@ -273,6 +279,8 @@ export async function executeSplit(
   return { txHash, balances };
 }
 
+const lastBalances = new Map<string, VaultBalance[]>();
+
 /** Get on-chain vault balances (read-only). Returns [] on any error. */
 export async function getBalances(publicKey: string): Promise<VaultBalance[]> {
   const retval = await simulate(
@@ -287,13 +295,20 @@ export async function getBalances(publicKey: string): Promise<VaultBalance[]> {
       balance: bigint;
       vault_id: number;
     }>;
-    return raw.map((v) => ({
+    const balances = raw.map((v) => ({
       vault_id: v.vault_id,
       balance: BigInt(v.balance),
     }));
+    lastBalances.set(publicKey, balances);
+    return balances;
   } catch {
     return [];
   }
+}
+
+/** Last balances read in this session, to paint instantly while revalidating. */
+export function getCachedBalances(publicKey: string): VaultBalance[] | undefined {
+  return lastBalances.get(publicKey);
 }
 
 /** Get configured split rules for a user (read-only). Returns [] on any error. */
@@ -313,6 +328,49 @@ export async function getRules(publicKey: string): Promise<SplitRule[]> {
     return raw.map((r) => ({ vault_id: r.vault_id, percentage: r.percentage }));
   } catch {
     return [];
+  }
+}
+
+/** Let an agent run splits for this user until revoked. */
+export async function authorizeAgent(
+  publicKey: string,
+  agent: string,
+  signFn: SignFn,
+): Promise<string> {
+  const { txHash } = await invoke(
+    SPLIT_CONTRACT_ID,
+    "authorize_agent",
+    [addressVal(publicKey), addressVal(agent)],
+    publicKey,
+    signFn,
+  );
+  return txHash;
+}
+
+export async function revokeAgent(publicKey: string, signFn: SignFn): Promise<string> {
+  const { txHash } = await invoke(
+    SPLIT_CONTRACT_ID,
+    "revoke_agent",
+    [addressVal(publicKey)],
+    publicKey,
+    signFn,
+  );
+  return txHash;
+}
+
+/** The agent this user authorized. Returns null if none or on any error. */
+export async function getAgent(publicKey: string): Promise<string | null> {
+  const retval = await simulate(
+    SPLIT_CONTRACT_ID,
+    "get_agent",
+    [addressVal(publicKey)],
+    publicKey,
+  );
+  if (!retval) return null;
+  try {
+    return S.scValToNative(retval) as string | null;
+  } catch {
+    return null;
   }
 }
 
@@ -493,8 +551,7 @@ export function formatTimeRemaining(seconds: number): string {
 /** Strict read for recovery: a network failure must never look like missing rules. */
 export async function getRulesStrict(publicKey: string): Promise<SplitRule[]> {
   const server = rpcServer();
-  const account = await server.getAccount(publicKey);
-  const tx = new S.TransactionBuilder(account, {
+  const tx = new S.TransactionBuilder(new S.Account(publicKey, "0"), {
     fee: S.BASE_FEE,
     networkPassphrase: NETWORK_PASSPHRASE,
   })

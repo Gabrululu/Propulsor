@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { SPLIT_CONTRACT_ID } from "@/lib/stellar/client";
 
 const AGENT_SERVER_URL =
   import.meta.env.VITE_AGENT_SERVER_URL ||
@@ -44,7 +45,9 @@ export function useAgentStatus(): AgentStatus {
         if (cancelled) return;
         if (res.ok) {
           const data = await res.json();
-          setIsOnline(true);
+          // A server still running against another contract can't act for this
+          // app's users, e.g. while a release reaches Railway after the frontend.
+          setIsOnline(data.contractId === SPLIT_CONTRACT_ID);
           setAgentAddress(data.serverAddress);
         } else {
           setIsOnline(false);

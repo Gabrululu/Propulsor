@@ -70,7 +70,6 @@ cp .env.example .env
 | `PORT` | `3001` | HTTP port |
 | `RPC_URL` | `https://soroban-testnet.stellar.org` | Soroban RPC |
 | `FACILITATOR_URL` | `https://www.x402.org/facilitator` | x402 payment facilitator |
-| `CONTRACT_ID` | `CCRH4EPUVIPESWYWOWPQ2QK3XN6KBR3RY6UFK36A4MXKKXIFH6ONRTVY` | SplitProtocol address |
 | `INTERNAL_API_KEY` | *(required for /split)* | Random secret shared with Supabase Edge Function |
 | `SUPABASE_URL` | *(optional)* | Supabase project URL — required to reach `agent-webhook` |
 | `AGENT_WEBHOOK_SECRET` | *(optional)* | Shared secret with the `agent-webhook` Edge Function — enables transaction history + the dashboard's live Agent status card (`agent_status`/`agent_activity`). The agent never needs `SUPABASE_SERVICE_ROLE_KEY` directly — the Edge Function has it auto-injected. |

@@ -21,13 +21,14 @@ import { EventSource } from 'eventsource';
 (global as unknown as Record<string, unknown>).EventSource = EventSource;
 
 import 'dotenv/config';
-import { Horizon, Keypair } from '@stellar/stellar-sdk';
+import { Account, Address, BASE_FEE, Contract, Horizon, Keypair, Networks, TransactionBuilder, rpc, scValToNative } from '@stellar/stellar-sdk';
 import { ExactStellarScheme } from '@x402/stellar/exact/client';
 import { createEd25519Signer } from '@x402/stellar';
 import {
   decodePaymentRequiredHeader,
   encodePaymentSignatureHeader,
 } from '@x402/core/http';
+import { SPLIT_CONTRACT_ID } from './config.js';
 import { depositToBlend } from './blend.js';
 import { notifyAgentWebhook } from './supabase.js';
 
@@ -39,6 +40,8 @@ const HORIZON_URL = 'https://horizon-testnet.stellar.org';
 const AGENT_SERVER_URL = process.env.AGENT_SERVER_URL ?? 'http://localhost:3001';
 const USDC_CODE = 'USDC';
 const USDC_ISSUER = 'GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5';
+const RPC_URL = process.env.RPC_URL ?? 'https://soroban-testnet.stellar.org';
+const CONTRACT_ID = SPLIT_CONTRACT_ID;
 const RECONNECT_DELAY_MS = 5_000;
 const WATCHLIST_REFRESH_MS = 60_000;
 
@@ -125,6 +128,30 @@ async function refreshWatchlist(): Promise<void> {
 }
 
 // ---------------------------------------------------------------------------
+// Authorization check — avoids paying the x402 fee for a split the contract
+// would refuse because this user never authorized the agent server.
+// ---------------------------------------------------------------------------
+
+async function isServerAuthorizedBy(user: string): Promise<boolean> {
+  const health = await fetch(`${AGENT_SERVER_URL}/health`);
+  if (!health.ok) throw new Error(`Agent server /health returned ${health.status}`);
+  const { serverAddress } = (await health.json()) as { serverAddress: string };
+
+  const tx = new TransactionBuilder(new Account(user, '0'), {
+    fee: BASE_FEE,
+    networkPassphrase: Networks.TESTNET,
+  })
+    .addOperation(new Contract(CONTRACT_ID).call('get_agent', new Address(user).toScVal()))
+    .setTimeout(30)
+    .build();
+  const sim = await new rpc.Server(RPC_URL).simulateTransaction(tx);
+  if (rpc.Api.isSimulationError(sim) || !sim.result) {
+    throw new Error('Could not read the user authorization from the contract');
+  }
+  return scValToNative(sim.result.retval) === serverAddress;
+}
+
+// ---------------------------------------------------------------------------
 // x402 payment flow
 //
 // 1. POST /execute-split  → 402 + PAYMENT-REQUIRED header
@@ -135,10 +162,10 @@ async function refreshWatchlist(): Promise<void> {
 
 async function callExecuteSplitWithPayment(
   userPublicKey: string,
-  incomeAmount: number,
+  paymentId: string,
 ): Promise<{ txHash: string; vaultBreakdown: Array<{ vaultId: number; balance: string }> }> {
   const url = `${AGENT_SERVER_URL}/execute-split`;
-  const body = JSON.stringify({ userPublicKey, incomeAmount });
+  const body = JSON.stringify({ userPublicKey, paymentId });
   const headers = { 'Content-Type': 'application/json' };
 
   // ── Step 1: Initial request (expect 402) ──────────────────────────────────
@@ -205,6 +232,7 @@ async function callExecuteSplitWithPayment(
 // ---------------------------------------------------------------------------
 
 type HorizonPayment = {
+  id: string;
   type: string;
   asset_type: string;
   asset_code?: string;
@@ -252,8 +280,13 @@ function startStream(): () => void {
         );
 
         try {
+          if (!(await isServerAuthorizedBy(p.to))) {
+            log('  Recipient has not authorized the agent — skipping');
+            return;
+          }
+
           logSection('x402 PAYMENT FLOW — calling /execute-split');
-          const result = await callExecuteSplitWithPayment(p.from, incomeAmount);
+          const result = await callExecuteSplitWithPayment(p.to, p.id);
 
           logSection('SPLIT EXECUTED SUCCESSFULLY');
           log(`  Contract txHash:  ${result.txHash}`);

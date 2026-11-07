@@ -5,18 +5,20 @@ import SplitBar from "@/components/SplitBar";
 import TxRow from "@/components/TxRow";
 import AgentStatusCard from "@/components/agent/AgentStatusCard";
 import AgentActivityFeed from "@/components/agent/AgentActivityFeed";
+import AgentAuthorization from "@/components/agent/AgentAuthorization";
 import ZKProofPanel from "@/components/ZKProofPanel";
 import ConsistentSavingProofPanel from "@/components/ConsistentSavingProofPanel";
 import { useExchangeRate } from "@/hooks/useExchangeRate";
 import { useStellarBalance } from "@/hooks/useStellarBalance";
 import { useAgentStatus } from "@/hooks/useAgentStatus";
+import { useAgentAuthorization } from "@/hooks/useAgentAuthorization";
 import { getHorizonServer } from "@/lib/stellar/client";
 import { useContracts } from "@/hooks/useContracts";
 import { useWallet } from "@/lib/stellar/WalletContext";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
-import { stroopsToUsdc, usdcToStroops } from "@/lib/stellar/contracts";
-import type { SplitRule, VaultLock } from "@/lib/stellar/contracts";
+import { getCachedBalances, stroopsToUsdc, usdcToStroops } from "@/lib/stellar/contracts";
+import type { SplitRule, VaultBalance, VaultLock } from "@/lib/stellar/contracts";
 import { toast } from "@/hooks/use-toast";
 import { triggerManualSplit } from "@/lib/agent/client";
 import type { AgentSplitResult } from "@/lib/agent/client";
@@ -35,6 +37,12 @@ const VAULT_META = [
   { name: "Meta grande", icon: "🚀", color: "pink-soft" as const, colorHex: "#e8a0b4" },
 ];
 
+const toVaultAmounts = (balances: VaultBalance[]) => {
+  const amounts = [0, 0, 0];
+  balances.forEach((b) => { if (b.vault_id <= 2) amounts[b.vault_id] = stroopsToUsdc(b.balance); });
+  return amounts;
+};
+
 const Dashboard = () => {
   const { publicKey, mode } = useWallet();
   const { user } = useAuth();
@@ -47,8 +55,9 @@ const Dashboard = () => {
   const [userName, setUserName] = useState<string>("");
 
   // On-chain vault balances (USDC floats for display)
-  const [vaultBalances, setVaultBalances] = useState<number[]>([0, 0, 0]);
-  const [balancesLoading, setBalancesLoading] = useState(true);
+  const cachedBalances = publicKey ? getCachedBalances(publicKey) : undefined;
+  const [vaultBalances, setVaultBalances] = useState<number[]>(() => toVaultAmounts(cachedBalances ?? []));
+  const [balancesLoading, setBalancesLoading] = useState(!cachedBalances);
   const [recentTxs, setRecentTxs] = useState<{
     type: "split" | "deposit" | "lock" | "withdrawal";
     description: string;
@@ -74,6 +83,7 @@ const Dashboard = () => {
 
   // Agent manual trigger state
   const { isOnline: agentOnline } = useAgentStatus();
+  const agentAuthorization = useAgentAuthorization();
   const [agentAmount, setAgentAmount] = useState("");
   const [agentLoading, setAgentLoading] = useState(false);
   const [agentResult, setAgentResult] = useState<AgentSplitResult | null>(null);
@@ -101,19 +111,16 @@ const Dashboard = () => {
         contracts.getRules(),
       ]);
 
-      const arr = [0, 0, 0];
-      bals.forEach((b) => { if (b.vault_id <= 2) arr[b.vault_id] = stroopsToUsdc(b.balance); });
-      setVaultBalances(arr);
+      setVaultBalances(toVaultAmounts(bals));
+      setBalancesLoading(false);
 
       if (chainRules.length > 0) setRules(chainRules);
 
-      // Fetch lock states for each vault
-      const lockPromises = [0, 1, 2].map((id) => contracts.getLock(id));
-      const releasePromises = [0, 1, 2].map((id) => contracts.checkRelease(id));
-      const [lockResults, releaseResults] = await Promise.all([
-        Promise.all(lockPromises),
-        Promise.all(releasePromises),
-      ]);
+      // Fetch lock states for each vault; only a locked vault can be released
+      const lockResults = await Promise.all([0, 1, 2].map((id) => contracts.getLock(id)));
+      const releaseResults = await Promise.all(
+        lockResults.map((lock, id) => (lock ? contracts.checkRelease(id) : false)),
+      );
       setLocks(lockResults);
       setReleaseFlags(releaseResults);
     } catch {
@@ -132,12 +139,17 @@ const Dashboard = () => {
   // ── Horizon payment stream ───────────────────────────────
   useEffect(() => {
     if (!publicKey) return;
+    let cancelled = false;
     const setupStream = async () => {
       try {
         const server = await getHorizonServer();
+        if (cancelled) return;
         const closeStream = server
           .payments()
           .forAccount(publicKey)
+          // Without a cursor Horizon replays the account's whole payment
+          // history, which showed old payments as new on every visit.
+          .cursor("now")
           .stream({
             onmessage: (payment: { type: string; to: string; amount: string; asset_code?: string }) => {
               if (payment.type === "payment" && payment.to === publicKey) {
@@ -153,7 +165,11 @@ const Dashboard = () => {
       } catch { /* stream setup failed, proceed without live updates */ }
     };
     setupStream();
-    return () => { if (streamRef.current) streamRef.current(); };
+    return () => {
+      cancelled = true;
+      if (streamRef.current) streamRef.current();
+      streamRef.current = null;
+    };
   }, [publicKey, loadBalances]);
 
   // ── Supabase realtime: agent split activity ──────────────
@@ -208,7 +224,7 @@ const Dashboard = () => {
 
     try {
       const result = await triggerManualSplit(
-        { userPublicKey: publicKey, incomeAmount: Number(usdcToStroops(usdc)) },
+        { incomeAmount: Number(usdcToStroops(usdc)) },
         controller.signal
       );
       setAgentResult(result);
@@ -244,9 +260,7 @@ const Dashboard = () => {
       );
 
       // Update vault balances locally
-      const arr = [0, 0, 0];
-      balances.forEach((b) => { if (b.vault_id <= 2) arr[b.vault_id] = stroopsToUsdc(b.balance); });
-      setVaultBalances(arr);
+      setVaultBalances(toVaultAmounts(balances));
 
       const shortHash = `${txHash.slice(0, 8)}...${txHash.slice(-4)}`;
       setRecentTxs((prev) => [
@@ -323,15 +337,16 @@ const Dashboard = () => {
         </div>
 
         {/* Agent status + activity feed */}
-        <AgentStatusCard />
+        <AgentStatusCard authorized={agentAuthorization.authorized} />
+        {agentOnline && <AgentAuthorization {...agentAuthorization} />}
         <AgentActivityFeed />
 
         {/* ZK Privacy Layer */}
         <ZKProofPanel />
         <ConsistentSavingProofPanel />
 
-        {/* Agent manual trigger — only when agent server is online */}
-        {agentOnline && (
+        {/* Agent manual trigger — only when the server is online and may act for this user */}
+        {agentOnline && agentAuthorization.authorized && (
           <div className="bg-card-dark border border-pink-subtle rounded-sm p-5 mb-8">
             <h3 className="font-mono text-xs uppercase tracking-widest text-body-muted mb-4">
               ⚡ Activar separación con el agente

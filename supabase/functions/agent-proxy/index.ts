@@ -43,14 +43,32 @@ serve(async (req) => {
     }
 
     // ── Parse request body ─────────────────────────────────────────────────
-    const { userPublicKey, incomeAmount } = await req.json() as {
-      userPublicKey?: string;
-      incomeAmount?: number;
-    };
+    const { incomeAmount } = await req.json() as { incomeAmount?: number };
 
-    if (!userPublicKey || typeof incomeAmount !== "number" || incomeAmount <= 0) {
+    if (typeof incomeAmount !== "number" || incomeAmount <= 0) {
       return new Response(
-        JSON.stringify({ success: false, error: "userPublicKey and incomeAmount are required" }),
+        JSON.stringify({ success: false, error: "incomeAmount is required" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+
+    const adminSupabase = createClient(
+      Deno.env.get("SUPABASE_URL")!,
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+    );
+
+    // The account always comes from the session's own profile, never the
+    // request, so nobody can trigger a split on someone else's vaults.
+    const { data: profile } = await adminSupabase
+      .from("users_profile")
+      .select("stellar_public_key")
+      .eq("id", user.id)
+      .maybeSingle();
+    const userPublicKey = profile?.stellar_public_key;
+
+    if (!userPublicKey) {
+      return new Response(
+        JSON.stringify({ success: false, error: "No Stellar account for this user" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }
@@ -88,11 +106,6 @@ serve(async (req) => {
 
     // ── Write to transactions table on success ─────────────────────────────
     if (result.success && result.txHash && result.vaultBreakdown) {
-      const adminSupabase = createClient(
-        Deno.env.get("SUPABASE_URL")!,
-        Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
-      );
-
       const vaultDesc = result.vaultBreakdown
         .map((v) => {
           const stroops = BigInt(v.balance);

@@ -1,5 +1,5 @@
 import { userError } from "@/lib/userErrors";
-import { hasCompletedOnboarding } from "@/lib/onboarding";
+import { hasCompletedOnboarding, wasOnboardingComplete } from "@/lib/onboarding";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
@@ -118,7 +118,7 @@ const Auth = () => {
             }
           }
 
-          const nextPath = (await hasCompletedOnboarding(userId))
+          const nextPath = wasOnboardingComplete(userId) || (await hasCompletedOnboarding(userId))
             ? "/dashboard"
             : "/onboarding";
           setDebugStatus(`login:success -> ${nextPath}`);
@@ -269,7 +269,9 @@ const Auth = () => {
         navigate("/onboarding");
       } else {
         navigate(
-          (await hasCompletedOnboarding(userId)) ? "/dashboard" : "/onboarding",
+          wasOnboardingComplete(userId) || (await hasCompletedOnboarding(userId))
+            ? "/dashboard"
+            : "/onboarding",
         );
       }
     } catch (err: unknown) {

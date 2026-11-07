@@ -26,6 +26,9 @@ import {
   addToLock,
   getLock,
   getTimeRemaining,
+  getAgent,
+  authorizeAgent,
+  revokeAgent,
 } from "@/lib/stellar/contracts";
 
 export function useContracts() {
@@ -56,7 +59,20 @@ export function useContracts() {
       return getTimeRemaining(publicKey, vaultId);
     },
 
+    getAgent: () => {
+      if (!publicKey) return Promise.resolve(null);
+      return getAgent(publicKey);
+    },
+
     // ── state-changing (PIN for custodial) ─────────────────
+    authorizeAgent: (agent: string, pin?: string) => {
+      if (!publicKey) throw new Error("Wallet no conectada");
+      return authorizeAgent(publicKey, agent, makeSign(pin));
+    },
+    revokeAgent: (pin?: string) => {
+      if (!publicKey) throw new Error("Wallet no conectada");
+      return revokeAgent(publicKey, makeSign(pin));
+    },
     setRules: (
       rules: SplitRule[],
       pin?: string,

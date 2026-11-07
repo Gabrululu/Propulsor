@@ -27,11 +27,16 @@ interface VaultData {
   timeRemaining: number;
 }
 
+// Last vaults shown in this session, to paint instantly when returning to the tab
+let lastVaults: { publicKey: string; vaults: VaultData[] } | null = null;
+
 const Bovedas = () => {
   const { mode } = useWallet();
   const contracts = useContracts();
-  const [vaults, setVaults] = useState<VaultData[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { publicKey } = contracts;
+  const cachedVaults = lastVaults?.publicKey === publicKey ? lastVaults.vaults : null;
+  const [vaults, setVaults] = useState<VaultData[]>(cachedVaults ?? []);
+  const [loading, setLoading] = useState(!cachedVaults);
 
   // Release modal state
   const [releaseModal, setReleaseModal] = useState<{ vaultId: number; name: string } | null>(null);
@@ -72,11 +77,11 @@ const Bovedas = () => {
           const balUsdc = balEntry ? stroopsToUsdc(balEntry.balance) : 0;
           const pct = ruleEntry?.percentage ?? 0;
 
-          const [lock, canRelease, timeRemaining] = await Promise.all([
-            contracts.getLock(i),
-            contracts.checkRelease(i),
-            contracts.getTimeRemaining(i),
-          ]);
+          const lock = await contracts.getLock(i);
+          // Only a locked vault has a release state worth reading
+          const [canRelease, timeRemaining] = lock
+            ? await Promise.all([contracts.checkRelease(i), contracts.getTimeRemaining(i)])
+            : [false, 0];
 
           let unlockDate: string | undefined;
           if (lock?.unlock_timestamp) {
@@ -103,12 +108,13 @@ const Bovedas = () => {
       );
 
       setVaults(vaultList);
+      if (publicKey) lastVaults = { publicKey, vaults: vaultList };
     } catch (err) {
       console.error("Error loading vault data:", err);
     } finally {
       setLoading(false);
     }
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [publicKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     loadVaults();

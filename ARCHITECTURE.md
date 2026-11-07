@@ -141,7 +141,9 @@ stellar contract deploy \
   --source account \
   --network testnet
 
-# Copy the resulting Contract ID → VITE_SPLIT_CONTRACT_ID in .env
+# Copy the resulting Contract ID → SPLIT_CONTRACT_ID in src/lib/stellar/client.ts, agent/src/config.ts
+# and supabase/functions/zk-fetch-user-data/index.ts, and VITE_SPLIT_CONTRACT_ID in .env.example
+# (src/lib/stellar/contractIds.test.ts fails if they differ)
 ```
 
 ### Contract Logic
@@ -170,10 +172,10 @@ Both contracts require `Address.require_auth()` on every state-changing call, us
 
 | Field | Value |
 |---|---|
-| Contract ID | `CCRH4EPUVIPESWYWOWPQ2QK3XN6KBR3RY6UFK36A4MXKKXIFH6ONRTVY` |
-| Wasm Hash | `ea57fb45e7dd0e5865d9512b50683d22b7076f1eba36c24dffc7b09077533c1e` |
-| Deploy Tx | [`d11b2ad6…0834ddc7`](https://stellar.expert/explorer/testnet/tx/d11b2ad60355df81a03a2a0d16c626fe016f0e1265f31d280292549b0834ddc7) |
-| Lab | [View on Stellar Lab](https://lab.stellar.org/r/testnet/contract/CCRH4EPUVIPESWYWOWPQ2QK3XN6KBR3RY6UFK36A4MXKKXIFH6ONRTVY) |
+| Contract ID | `CAZGYZEJJJ2GQMVEX4MKJ633JNCMGC5WH4P2P6PEXQBMH2VYX5Q2G3BI` |
+| Lab | [View on Stellar Lab](https://lab.stellar.org/r/testnet/contract/CAZGYZEJJJ2GQMVEX4MKJ633JNCMGC5WH4P2P6PEXQBMH2VYX5Q2G3BI) |
+
+Deployed 2026-11-07 with no admin: a user authorizes one agent with `authorize_agent` and removes it with `revoke_agent`. `agent_execute_split` only adds to that user's vault accounting (no USDC moves) and refuses a `payment_ref` it has already seen. `get_split_history` keeps the user's largest split per 10-day window for about a year.
 
 **TimeVault**
 
@@ -190,7 +192,7 @@ Both contracts require `Address.require_auth()` on every state-changing call, us
 # set_rules — configure 60/30/10
 stellar contract invoke \
   --source-account deployer \
-  --id CCRH4EPUVIPESWYWOWPQ2QK3XN6KBR3RY6UFK36A4MXKKXIFH6ONRTVY \
+  --id CAZGYZEJJJ2GQMVEX4MKJ633JNCMGC5WH4P2P6PEXQBMH2VYX5Q2G3BI \
   --network testnet \
   -- set_rules \
   --user $(stellar keys public-key deployer) \
@@ -200,7 +202,7 @@ stellar contract invoke \
 # execute_split — split 1,000,000,000 stroops
 stellar contract invoke \
   --source-account deployer \
-  --id CCRH4EPUVIPESWYWOWPQ2QK3XN6KBR3RY6UFK36A4MXKKXIFH6ONRTVY \
+  --id CAZGYZEJJJ2GQMVEX4MKJ633JNCMGC5WH4P2P6PEXQBMH2VYX5Q2G3BI \
   --network testnet \
   -- execute_split \
   --user $(stellar keys public-key deployer) \
@@ -261,7 +263,7 @@ ProofOfVaultVerifier (Soroban — Protocol 22)
 
 Proves a user has completed splits in ≥ 6 distinct months out of the last 12, without revealing individual amounts. Uses the RISC Zero zkVM.
 
-- Guest: `zk/risc0/consistent_saving/methods/guest/src/main.rs` — counts qualifying months from Supabase history
+- Guest: `zk/risc0/consistent_saving/methods/guest/src/main.rs` — counts qualifying months from the user's on-chain split history (`SplitProtocol.get_split_history`, served to the host by `zk-fetch-user-data`). Splits made before the 2026-11-07 deployment aren't in that history
 - Host: `zk/risc0/consistent_saving/host/src/main.rs` — generates a `Groth16Receipt` (STARK wrapped to BN254 via `ProverOpts::groth16()`)
 - On-chain verifier: `zk/contracts/consistent_saving_verifier` (`ConsistentSavingVerifier`, Soroban/BN254, CAP-0074) — mirrors `ProofOfVaultVerifier`'s BLS12-381 pairing-check pattern, generalized to 5 public inputs and RISC Zero's published (no-new-trusted-setup) verifying key. See `zk/risc0/consistent_saving/SPEC.md` for the full derivation.
 - Status: **live on Testnet.** Phase 1 (empirical formula cross-check against a real Groth16 receipt), Phase 3 (contract logic + tests, including a real end-to-end proof accepted via Soroban's actual BN254 host functions), and Phase 4 (deploy + on-chain submission) all completed 2026-08-21.
@@ -471,7 +473,7 @@ VITE_HORIZON_URL=https://horizon-testnet.stellar.org
 VITE_SOROBAN_RPC_URL=https://soroban-testnet.stellar.org
 
 # Soroban Contract IDs
-VITE_SPLIT_CONTRACT_ID=CCRH4EPUVIPESWYWOWPQ2QK3XN6KBR3RY6UFK36A4MXKKXIFH6ONRTVY
+VITE_SPLIT_CONTRACT_ID=CAZGYZEJJJ2GQMVEX4MKJ633JNCMGC5WH4P2P6PEXQBMH2VYX5Q2G3BI
 VITE_VAULT_CONTRACT_ID=CC73UGT72A2MOZOSK6WFWMMIL32OJPJSPKEBFNBLK2GZJYNORERTSSWX
 VITE_ZK_VERIFIER_CONTRACT_ID=CAGUCQUMNSOJALPFM3A2T2TBDIDCFUDY3UQA6JIWAN4ZP3COPQ7HP7BU
 VITE_CONSISTENT_SAVING_VERIFIER_CONTRACT_ID=CDBUSPDUC4AYSWPVCX5QQLRVFJUEJDW3BTZ5EOVH77TCJXW3CKC5X6KQ

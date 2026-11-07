@@ -21,12 +21,16 @@ export const USDC_ISSUER = "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLL
 export const SEP24_HOME_DOMAIN = "testanchor.stellar.org";
 
 // Contract IDs — Soroban Testnet deployments
-// Fallback to env vars for local override, but default to deployed contract IDs
-export const SPLIT_CONTRACT_ID =
-  import.meta.env.VITE_SPLIT_CONTRACT_ID || "CCRH4EPUVIPESWYWOWPQ2QK3XN6KBR3RY6UFK36A4MXKKXIFH6ONRTVY";
+// Fallback to env vars for local override, but default to deployed contract IDs.
+// SplitProtocol has no override: the app and the agent must use the same contract.
+export const SPLIT_CONTRACT_ID = "CAZGYZEJJJ2GQMVEX4MKJ633JNCMGC5WH4P2P6PEXQBMH2VYX5Q2G3BI";
 export const VAULT_CONTRACT_ID =
   import.meta.env.VITE_VAULT_CONTRACT_ID || "CC73UGT72A2MOZOSK6WFWMMIL32OJPJSPKEBFNBLK2GZJYNORERTSSWX";
 export const isSimulationMode = !SPLIT_CONTRACT_ID;
+
+// The agent server's account — the one users authorize to split on their behalf
+export const AGENT_ADDRESS =
+  import.meta.env.VITE_AGENT_ADDRESS || "GBM5FCDYTAVY4RLYITBDDXSIGWD525REVAEWEP4AHXKX6PMXW7CXLW33";
 
 export interface HorizonTxRecord {
   id: string;
@@ -54,7 +58,9 @@ interface HorizonClient {
   };
   payments(): {
     forAccount(publicKey: string): {
-      stream(opts: { onmessage: (msg: unknown) => void }): () => void;
+      cursor(token: string): {
+        stream(opts: { onmessage: (msg: unknown) => void }): () => void;
+      };
     };
   };
 }
@@ -153,6 +159,10 @@ function createFallbackHorizonClient(): HorizonClient {
       return {
         forAccount(publicKey: string) {
           return {
+            // This fallback always streams from cursor=now
+            cursor() {
+              return this;
+            },
             stream(opts: { onmessage: (msg: unknown) => void }) {
               // EventSource streaming
               try {

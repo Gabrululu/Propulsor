@@ -23,7 +23,7 @@ function timeAgo(iso: string | null | undefined): string {
   return `hace ${days}d`;
 }
 
-const AgentStatusCard = () => {
+const AgentStatusCard = ({ authorized }: { authorized: boolean }) => {
   const { isOnline, agentAddress, loading: healthLoading } = useAgentStatus();
   const { status, loading: statusLoading } = useAgentActivity();
 
@@ -33,7 +33,8 @@ const AgentStatusCard = () => {
   // calls). The payment server responding to /health (isOnline) only proves
   // the split engine is reachable — it says nothing about whether anything
   // is watching this specific wallet, so it must not be conflated with "Activo".
-  const isActive = Boolean(status?.is_active);
+  // It must also be authorized by the user, or it cannot split for them at all.
+  const isActive = Boolean(status?.is_active) && authorized;
 
   return (
     <div
@@ -61,7 +62,7 @@ const AgentStatusCard = () => {
         ) : (
           <span className="flex items-center gap-1.5 font-mono text-xs text-body-muted">
             <span className="w-1.5 h-1.5 rounded-full bg-body-muted inline-block" />
-            {isOnline ? "Sin vigilancia" : "No disponible"}
+            {!isOnline ? "No disponible" : authorized ? "Sin vigilancia" : "Sin autorizar"}
           </span>
         )}
       </div>
@@ -70,6 +71,8 @@ const AgentStatusCard = () => {
       <p className="text-body-muted text-xs font-mono mb-4 leading-relaxed">
         {isActive
           ? "Tu dinero está protegido en el momento en que llega. El agente detecta cada remesa y hace el reparto antes de que llegue cualquier presión externa."
+          : isOnline && !authorized
+          ? "El agente no puede separar por ti hasta que lo autorices."
           : isOnline
           ? "El motor de pagos está disponible, pero todavía no hay confirmación de que un agente esté vigilando tu cuenta — el reparto automático no se ejecutará hasta que eso ocurra."
           : "El agente automático no está disponible en este momento."}

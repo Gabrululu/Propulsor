@@ -12,6 +12,7 @@
  */
 
 import 'dotenv/config';
+import { SPLIT_CONTRACT_ID } from './config.js';
 import {
   Keypair,
   Networks,
@@ -38,8 +39,7 @@ const RULES: Array<{ vault_id: number; percentage: number }> = [
 // ---------------------------------------------------------------------------
 
 const RPC_URL = process.env.RPC_URL ?? 'https://soroban-testnet.stellar.org';
-const CONTRACT_ID =
-  process.env.CONTRACT_ID ?? 'CCRH4EPUVIPESWYWOWPQ2QK3XN6KBR3RY6UFK36A4MXKKXIFH6ONRTVY';
+const CONTRACT_ID = SPLIT_CONTRACT_ID;
 
 if (!process.env.SERVER_STELLAR_SECRET) {
   console.error('ERROR: SERVER_STELLAR_SECRET not set. Copy .env.example → .env and fill it in.');
