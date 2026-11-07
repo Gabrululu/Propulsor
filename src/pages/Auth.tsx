@@ -174,7 +174,7 @@ const Auth = () => {
   };
 
   const walletInstallUrls: Record<string, string> = {
-    [FREIGHTER_ID]: "https://varialwallet.com",
+    [FREIGHTER_ID]: "https://chromewebstore.google.com/detail/freighter/bcacfldlkkdogcmkkibnjlakofdplcbk",
     [XBULL_ID]: "https://xbull.app",
     [ALBEDO_ID]: "https://albedo.link",
     [LOBSTR_ID]: "https://lobstr.co",
@@ -208,6 +208,10 @@ const Auth = () => {
       kit.setWallet(walletId);
       const { address } = await kit.requestAccess();
       if (!address) throw new Error("No se obtuvo dirección de la wallet");
+
+      // Sync the external wallet into WalletContext so publicKey/mode are
+      // available immediately (balance lookups, signing, etc. depend on this).
+      reconnect(address, "external");
 
       // Use the Stellar public key as a deterministic email+password for Supabase auth
       const syntheticEmail = `${address.slice(0, 16).toLowerCase()}@stellar.propulsor.app`;
