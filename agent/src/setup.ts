@@ -3,7 +3,7 @@
  * for the server's Stellar address.
  *
  * Run once before starting the server:
- *   npm run setup
+ *   pnpm run setup
  *
  * Default rules (edit RULES below to change, must sum to 100):
  *   Vault 0 → 60%  (e.g. Hogar / essential expenses)
@@ -135,7 +135,7 @@ async function main() {
   if (confirmed.status === SorobanRpc.Api.GetTransactionStatus.SUCCESS) {
     console.log('Split rules set successfully!');
     console.log('  txHash:', send.hash);
-    console.log('  You can now start the server: npm run dev');
+    console.log('  You can now start the server: pnpm run dev');
   } else {
     throw new Error(`Transaction failed with status: ${confirmed.status}`);
   }

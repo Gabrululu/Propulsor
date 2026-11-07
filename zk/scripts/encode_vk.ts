@@ -5,7 +5,7 @@
  * the encoded VK ready for ProofOfVaultVerifier.initialize().
  *
  * Usage:
- *   npx tsx scripts/encode_vk.ts
+ *   pnpm exec tsx scripts/encode_vk.ts
  *
  * Output: vk_encoded.json  — ready to paste into stellar contract invoke
  */

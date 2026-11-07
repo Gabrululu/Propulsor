@@ -11,18 +11,19 @@ import {
   encryptSecretKey,
   decryptSecretKey,
 } from "./wallet";
-import { NETWORK_PASSPHRASE } from "./client";
+import { getHorizonServer, NETWORK_PASSPHRASE } from "./client";
 
 // ── Create a custodial account ──────────────────────────────
 
 export interface CustodialAccountResult {
   publicKey: string;
   funded: boolean;
+  mode: "custodial" | "custodial_social";
 }
 
 export async function createCustodialAccount(
   userId: string,
-  pin: string
+  pin: string,
 ): Promise<CustodialAccountResult> {
   // 1. Generate Stellar keypair
   const { publicKey, secretKey } = generateKeypair();
@@ -42,14 +43,14 @@ export async function createCustodialAccount(
       stellar_secret_encrypted: encrypted,
       stellar_funded: funded,
     },
-    { onConflict: "id" }
+    { onConflict: "id" },
   );
 
   if (error) {
-    console.error("Failed to save custodial account:", error.message);
+    throw new Error("PROFILE_SAVE_FAILED");
   }
 
-  return { publicKey, funded };
+  return { publicKey, funded, mode: "custodial" };
 }
 
 // ── Sign a transaction as a custodial user ──────────────────
@@ -57,20 +58,19 @@ export async function createCustodialAccount(
 export async function signCustodial(
   txXdr: string,
   encryptedSecret: string,
-  pin: string
+  pin: string,
 ): Promise<string> {
   // Decrypt the secret key
-  const secret = await decryptSecretKey(encryptedSecret, pin);
+  const secret = await decryptSecretKey(encryptedSecret, pin).catch(() => {
+    throw new Error("INCORRECT_PIN");
+  });
 
   // Build keypair and sign
   const keypair = StellarSdk.Keypair.fromSecret(secret);
 
   // Parse XDR → sign → return XDR
   try {
-    const tx = StellarSdk.TransactionBuilder.fromXDR(
-      txXdr,
-      NETWORK_PASSPHRASE
-    );
+    const tx = StellarSdk.TransactionBuilder.fromXDR(txXdr, NETWORK_PASSPHRASE);
     tx.sign(keypair);
     return tx.toXDR();
   } catch {
@@ -82,7 +82,7 @@ export async function signCustodial(
 // ── Load encrypted secret from Supabase ─────────────────────
 
 export async function loadEncryptedSecret(
-  userId: string
+  userId: string,
 ): Promise<string | null> {
   const { data, error } = await supabase
     .from("users_profile")
@@ -99,17 +99,37 @@ export async function loadEncryptedSecret(
 // Idempotent: returns existing keys if account already exists.
 
 export async function createCustodialAccountNoPin(
-  userId: string
+  userId: string,
 ): Promise<CustodialAccountResult> {
   // Return existing account if already created
-  const { data: existing } = await supabase
+  const { data: existing, error: loadError } = await supabase
     .from("users_profile")
     .select("stellar_public_key, stellar_secret_encrypted")
     .eq("id", userId)
-    .single();
+    .maybeSingle();
+  if (loadError) throw new Error("PROFILE_SAVE_FAILED");
 
   if (existing?.stellar_public_key && existing?.stellar_secret_encrypted) {
-    return { publicKey: existing.stellar_public_key, funded: true };
+    // Testnet resets can remove an account while its encrypted key still exists.
+    let funded = false;
+    try {
+      await (await getHorizonServer()).loadAccount(existing.stellar_public_key);
+      funded = true;
+    } catch {
+      funded = await fundTestnetAccount(existing.stellar_public_key);
+    }
+    const { error } = await supabase
+      .from("users_profile")
+      .update({ stellar_funded: funded })
+      .eq("id", userId);
+    if (error) throw new Error("PROFILE_SAVE_FAILED");
+    return {
+      publicKey: existing.stellar_public_key,
+      funded,
+      mode: (await verifyPin(existing.stellar_secret_encrypted, userId))
+        ? "custodial_social"
+        : "custodial",
+    };
   }
 
   // Generate new keypair and encrypt using userId as passphrase
@@ -124,21 +144,21 @@ export async function createCustodialAccountNoPin(
       stellar_secret_encrypted: encrypted,
       stellar_funded: funded,
     },
-    { onConflict: "id" }
+    { onConflict: "id" },
   );
 
   if (error) {
-    console.error("Failed to save social custodial account:", error.message);
+    throw new Error("PROFILE_SAVE_FAILED");
   }
 
-  return { publicKey, funded };
+  return { publicKey, funded, mode: "custodial_social" };
 }
 
 // ── Verify PIN is correct (decrypt → check validity) ────────
 
 export async function verifyPin(
   encryptedSecret: string,
-  pin: string
+  pin: string,
 ): Promise<boolean> {
   try {
     const secret = await decryptSecretKey(encryptedSecret, pin);

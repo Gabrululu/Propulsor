@@ -51,8 +51,9 @@ Propulsor is a programmable financial management platform for the informal econo
 ### Frontend
 
 ```bash
-npm install
-npm run dev      # http://localhost:5173
+# Node.js 22 or later (required by Stellar SDK 17)
+pnpm install --frozen-lockfile
+pnpm run dev      # http://localhost:5173
 ```
 
 Copy `.env.example` to `.env` and fill in your Supabase and Stellar values — see [Environment Variables](./ARCHITECTURE.md#environment-variables) for the full reference.
@@ -62,9 +63,9 @@ Copy `.env.example` to `.env` and fill in your Supabase and Stellar values — s
 The agent watches a Stellar account for incoming USDC and triggers the on-chain split itself. Full setup (keypair generation, funding, trustlines, env vars) lives in [ARCHITECTURE.md → Agentic Payments Layer](./ARCHITECTURE.md#agentic-payments-layer) and [`agent/README.md`](./agent/README.md).
 
 ```bash
-cd agent && npm install && npm run setup   # register split rules on-chain
-npm run dev       # terminal 1 — x402-protected split server
-npm run monitor   # terminal 2 — autonomous payment monitor
+cd agent && pnpm install --frozen-lockfile && pnpm run setup   # register split rules on-chain
+pnpm run dev       # terminal 1 — x402-protected split server
+pnpm run monitor   # terminal 2 — autonomous payment monitor
 ```
 
 ### Smart contracts

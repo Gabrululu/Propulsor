@@ -5,7 +5,7 @@
  * Runs entirely off-chain; secrets never leave this process.
  *
  * Usage:
- *   npx tsx scripts/generate_proof.ts \
+ *   pnpm exec tsx scripts/generate_proof.ts \
  *     --balance 1000000000 \
  *     --threshold 500000000
  *
@@ -13,7 +13,7 @@
  *   proof_output.json  — { proof, publicSignals, negA, stellarProof }
  *
  * Prerequisites:
- *   cd zk && npm install
+ *   cd zk && pnpm install --frozen-lockfile
  *   cd circuits/proof_of_vault && make all  (compile + setup)
  */
 

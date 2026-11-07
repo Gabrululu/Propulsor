@@ -22,15 +22,19 @@ import {
 export type SignFn = (txXdr: string) => Promise<string>;
 
 export type ProgressFn = (msg: string) => void;
+export type BeforeSubmitFn = (transaction: {
+  hash: string;
+  expiresAt: number;
+}) => Promise<void>;
 
 export interface SplitRule {
-  vault_id: number;   // 0 | 1 | 2
+  vault_id: number; // 0 | 1 | 2
   percentage: number; // 1-100, all rules sum to 100
 }
 
 export interface VaultBalance {
   vault_id: number;
-  balance: bigint;  // in stroops
+  balance: bigint; // in stroops
 }
 
 export interface VaultLock {
@@ -110,7 +114,8 @@ async function invoke(
   args: S.xdr.ScVal[],
   publicKey: string,
   signFn: SignFn,
-  onProgress?: ProgressFn
+  onProgress?: ProgressFn,
+  beforeSubmit?: BeforeSubmitFn,
 ): Promise<InvokeResult> {
   const server = rpcServer();
 
@@ -138,6 +143,15 @@ async function invoke(
 
   onProgress?.("Enviando a Stellar Testnet...");
   const signedTx = S.TransactionBuilder.fromXDR(signedXdr, NETWORK_PASSPHRASE);
+  // Persist the hash BEFORE broadcasting. If persistence fails, nothing is sent.
+  const timeBounds =
+    "innerTransaction" in signedTx
+      ? signedTx.innerTransaction.timeBounds
+      : signedTx.timeBounds;
+  const hash = Array.from(signedTx.hash(), (byte) =>
+    byte.toString(16).padStart(2, "0"),
+  ).join("");
+  await beforeSubmit?.({ hash, expiresAt: Number(timeBounds?.maxTime ?? 0) });
   const response = await server.sendTransaction(signedTx as S.Transaction);
 
   if (response.status === "ERROR") {
@@ -147,7 +161,10 @@ async function invoke(
   onProgress?.("Confirmando en el ledger...");
   let getResponse = await server.getTransaction(response.hash);
   let attempts = 0;
-  while (getResponse.status === S.rpc.Api.GetTransactionStatus.NOT_FOUND && attempts < 20) {
+  while (
+    getResponse.status === S.rpc.Api.GetTransactionStatus.NOT_FOUND &&
+    attempts < 20
+  ) {
     await new Promise((r) => setTimeout(r, 1500));
     getResponse = await server.getTransaction(response.hash);
     attempts++;
@@ -172,7 +189,7 @@ async function simulate(
   contractId: string,
   method: string,
   args: S.xdr.ScVal[],
-  publicKey: string
+  publicKey: string,
 ): Promise<S.xdr.ScVal | null> {
   try {
     const server = rpcServer();
@@ -205,7 +222,8 @@ export async function setRules(
   publicKey: string,
   rules: SplitRule[],
   signFn: SignFn,
-  onProgress?: ProgressFn
+  onProgress?: ProgressFn,
+  beforeSubmit?: BeforeSubmitFn,
 ): Promise<string> {
   const rulesVal = S.xdr.ScVal.scvVec(rules.map(encodeSplitRule));
   const { txHash } = await invoke(
@@ -214,7 +232,8 @@ export async function setRules(
     [addressVal(publicKey), rulesVal],
     publicKey,
     signFn,
-    onProgress
+    onProgress,
+    beforeSubmit,
   );
   return txHash;
 }
@@ -227,7 +246,7 @@ export async function executeSplit(
   publicKey: string,
   income: bigint,
   signFn: SignFn,
-  onProgress?: ProgressFn
+  onProgress?: ProgressFn,
 ): Promise<{ txHash: string; balances: VaultBalance[] }> {
   const { returnValue, txHash } = await invoke(
     SPLIT_CONTRACT_ID,
@@ -235,7 +254,7 @@ export async function executeSplit(
     [addressVal(publicKey), S.nativeToScVal(income, { type: "i128" })],
     publicKey,
     signFn,
-    onProgress
+    onProgress,
   );
 
   let balances: VaultBalance[] = [];
@@ -256,11 +275,22 @@ export async function executeSplit(
 
 /** Get on-chain vault balances (read-only). Returns [] on any error. */
 export async function getBalances(publicKey: string): Promise<VaultBalance[]> {
-  const retval = await simulate(SPLIT_CONTRACT_ID, "get_balances", [addressVal(publicKey)], publicKey);
+  const retval = await simulate(
+    SPLIT_CONTRACT_ID,
+    "get_balances",
+    [addressVal(publicKey)],
+    publicKey,
+  );
   if (!retval) return [];
   try {
-    const raw = S.scValToNative(retval) as Array<{ balance: bigint; vault_id: number }>;
-    return raw.map((v) => ({ vault_id: v.vault_id, balance: BigInt(v.balance) }));
+    const raw = S.scValToNative(retval) as Array<{
+      balance: bigint;
+      vault_id: number;
+    }>;
+    return raw.map((v) => ({
+      vault_id: v.vault_id,
+      balance: BigInt(v.balance),
+    }));
   } catch {
     return [];
   }
@@ -268,10 +298,18 @@ export async function getBalances(publicKey: string): Promise<VaultBalance[]> {
 
 /** Get configured split rules for a user (read-only). Returns [] on any error. */
 export async function getRules(publicKey: string): Promise<SplitRule[]> {
-  const retval = await simulate(SPLIT_CONTRACT_ID, "get_rules", [addressVal(publicKey)], publicKey);
+  const retval = await simulate(
+    SPLIT_CONTRACT_ID,
+    "get_rules",
+    [addressVal(publicKey)],
+    publicKey,
+  );
   if (!retval) return [];
   try {
-    const raw = S.scValToNative(retval) as Array<{ percentage: number; vault_id: number }>;
+    const raw = S.scValToNative(retval) as Array<{
+      percentage: number;
+      vault_id: number;
+    }>;
     return raw.map((r) => ({ vault_id: r.vault_id, percentage: r.percentage }));
   } catch {
     return [];
@@ -294,7 +332,7 @@ export async function lockVault(
   unlockTimestamp: number | null,
   goalAmount: bigint | null,
   signFn: SignFn,
-  onProgress?: ProgressFn
+  onProgress?: ProgressFn,
 ): Promise<string> {
   const { txHash } = await invoke(
     VAULT_CONTRACT_ID,
@@ -308,7 +346,7 @@ export async function lockVault(
     ],
     publicKey,
     signFn,
-    onProgress
+    onProgress,
   );
   return txHash;
 }
@@ -317,12 +355,15 @@ export async function lockVault(
  * Returns true if the vault's lock conditions are met (read-only).
  * A vault with no lock returns true.
  */
-export async function checkRelease(publicKey: string, vaultId: number): Promise<boolean> {
+export async function checkRelease(
+  publicKey: string,
+  vaultId: number,
+): Promise<boolean> {
   const retval = await simulate(
     VAULT_CONTRACT_ID,
     "check_release",
     [addressVal(publicKey), S.nativeToScVal(vaultId, { type: "u32" })],
-    publicKey
+    publicKey,
   );
   if (!retval) return false;
   try {
@@ -337,7 +378,7 @@ export async function releaseVault(
   publicKey: string,
   vaultId: number,
   signFn: SignFn,
-  onProgress?: ProgressFn
+  onProgress?: ProgressFn,
 ): Promise<{ txHash: string; amount: bigint }> {
   const { returnValue, txHash } = await invoke(
     VAULT_CONTRACT_ID,
@@ -345,7 +386,7 @@ export async function releaseVault(
     [addressVal(publicKey), S.nativeToScVal(vaultId, { type: "u32" })],
     publicKey,
     signFn,
-    onProgress
+    onProgress,
   );
   const amount = BigInt(S.scValToNative(returnValue) as bigint);
   return { txHash, amount };
@@ -357,7 +398,7 @@ export async function addToLock(
   vaultId: number,
   amount: bigint,
   signFn: SignFn,
-  onProgress?: ProgressFn
+  onProgress?: ProgressFn,
 ): Promise<string> {
   const { txHash } = await invoke(
     VAULT_CONTRACT_ID,
@@ -369,18 +410,21 @@ export async function addToLock(
     ],
     publicKey,
     signFn,
-    onProgress
+    onProgress,
   );
   return txHash;
 }
 
 /** Get the full lock state for a vault (read-only). Returns null if no lock. */
-export async function getLock(publicKey: string, vaultId: number): Promise<VaultLock | null> {
+export async function getLock(
+  publicKey: string,
+  vaultId: number,
+): Promise<VaultLock | null> {
   const retval = await simulate(
     VAULT_CONTRACT_ID,
     "get_lock",
     [addressVal(publicKey), S.nativeToScVal(vaultId, { type: "u32" })],
-    publicKey
+    publicKey,
   );
   if (!retval) return null;
   try {
@@ -390,8 +434,12 @@ export async function getLock(publicKey: string, vaultId: number): Promise<Vault
     return {
       vault_id: r.vault_id as number,
       locked_amount: BigInt(r.locked_amount as bigint),
-      unlock_timestamp: r.unlock_timestamp != null ? BigInt(r.unlock_timestamp as bigint) : null,
-      goal_amount: r.goal_amount != null ? BigInt(r.goal_amount as bigint) : null,
+      unlock_timestamp:
+        r.unlock_timestamp != null
+          ? BigInt(r.unlock_timestamp as bigint)
+          : null,
+      goal_amount:
+        r.goal_amount != null ? BigInt(r.goal_amount as bigint) : null,
       created_at: BigInt(r.created_at as bigint),
     };
   } catch {
@@ -403,12 +451,15 @@ export async function getLock(publicKey: string, vaultId: number): Promise<Vault
  * Seconds remaining until the time lock expires.
  * Negative = already past. 0 = no lock or no time condition.
  */
-export async function getTimeRemaining(publicKey: string, vaultId: number): Promise<number> {
+export async function getTimeRemaining(
+  publicKey: string,
+  vaultId: number,
+): Promise<number> {
   const retval = await simulate(
     VAULT_CONTRACT_ID,
     "get_time_remaining",
     [addressVal(publicKey), S.nativeToScVal(vaultId, { type: "u32" })],
-    publicKey
+    publicKey,
   );
   if (!retval) return 0;
   try {
@@ -437,4 +488,51 @@ export function formatTimeRemaining(seconds: number): string {
   if (days > 0) return `${days} días restantes`;
   if (hours > 0) return `${hours} horas restantes`;
   return `${Math.floor(seconds / 60)} minutos restantes`;
+}
+
+/** Strict read for recovery: a network failure must never look like missing rules. */
+export async function getRulesStrict(publicKey: string): Promise<SplitRule[]> {
+  const server = rpcServer();
+  const account = await server.getAccount(publicKey);
+  const tx = new S.TransactionBuilder(account, {
+    fee: S.BASE_FEE,
+    networkPassphrase: NETWORK_PASSPHRASE,
+  })
+    .addOperation(
+      new S.Contract(SPLIT_CONTRACT_ID).call(
+        "get_rules",
+        addressVal(publicKey),
+      ),
+    )
+    .setTimeout(30)
+    .build();
+  const result = await server.simulateTransaction(tx);
+  if (S.rpc.Api.isSimulationError(result))
+    throw new Error(`Simulation failed: ${result.error}`);
+  if (!result.result) throw new Error("Simulation returned no result");
+  const rules: unknown = S.scValToNative(result.result.retval);
+  if (
+    !Array.isArray(rules) ||
+    rules.some(
+      (r) =>
+        !r || !Number.isInteger(r.vault_id) || !Number.isInteger(r.percentage),
+    )
+  ) {
+    throw new Error("Invalid rules response");
+  }
+  return rules;
+}
+
+export async function getSetupTransactionStatus(
+  hash: string,
+  expiresAt: number,
+): Promise<"confirmed" | "failed" | "expired" | "pending"> {
+  const result = await rpcServer().getTransaction(hash);
+  if (result.status === S.rpc.Api.GetTransactionStatus.SUCCESS)
+    return "confirmed";
+  if (result.status === S.rpc.Api.GetTransactionStatus.FAILED) return "failed";
+  // Use the ledger's clock, not the phone clock. A delayed RPC must not permit a duplicate.
+  return expiresAt > 0 && result.latestLedgerCloseTime > expiresAt
+    ? "expired"
+    : "pending";
 }

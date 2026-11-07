@@ -66,3 +66,7 @@ Thumbs.db
 *.njsproj
 *.sln
 *.sw?
+
+# Browser test output
+playwright-report/
+test-results/

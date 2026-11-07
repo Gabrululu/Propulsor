@@ -10,7 +10,11 @@
  */
 
 import { useSigner } from "./useSigner";
-import type { ProgressFn, SplitRule } from "@/lib/stellar/contracts";
+import type {
+  ProgressFn,
+  SplitRule,
+  BeforeSubmitFn,
+} from "@/lib/stellar/contracts";
 import {
   setRules,
   executeSplit,
@@ -53,9 +57,20 @@ export function useContracts() {
     },
 
     // ── state-changing (PIN for custodial) ─────────────────
-    setRules: (rules: SplitRule[], pin?: string, onProgress?: ProgressFn) => {
+    setRules: (
+      rules: SplitRule[],
+      pin?: string,
+      onProgress?: ProgressFn,
+      beforeSubmit?: BeforeSubmitFn,
+    ) => {
       if (!publicKey) throw new Error("Wallet no conectada");
-      return setRules(publicKey, rules, makeSign(pin), onProgress);
+      return setRules(
+        publicKey,
+        rules,
+        makeSign(pin),
+        onProgress,
+        beforeSubmit,
+      );
     },
     executeSplit: (income: bigint, pin?: string, onProgress?: ProgressFn) => {
       if (!publicKey) throw new Error("Wallet no conectada");
@@ -67,16 +82,29 @@ export function useContracts() {
       unlockTimestamp: number | null,
       goalAmount: bigint | null,
       pin?: string,
-      onProgress?: ProgressFn
+      onProgress?: ProgressFn,
     ) => {
       if (!publicKey) throw new Error("Wallet no conectada");
-      return lockVault(publicKey, vaultId, amount, unlockTimestamp, goalAmount, makeSign(pin), onProgress);
+      return lockVault(
+        publicKey,
+        vaultId,
+        amount,
+        unlockTimestamp,
+        goalAmount,
+        makeSign(pin),
+        onProgress,
+      );
     },
     releaseVault: (vaultId: number, pin?: string, onProgress?: ProgressFn) => {
       if (!publicKey) throw new Error("Wallet no conectada");
       return releaseVault(publicKey, vaultId, makeSign(pin), onProgress);
     },
-    addToLock: (vaultId: number, amount: bigint, pin?: string, onProgress?: ProgressFn) => {
+    addToLock: (
+      vaultId: number,
+      amount: bigint,
+      pin?: string,
+      onProgress?: ProgressFn,
+    ) => {
       if (!publicKey) throw new Error("Wallet no conectada");
       return addToLock(publicKey, vaultId, amount, makeSign(pin), onProgress);
     },

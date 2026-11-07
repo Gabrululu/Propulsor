@@ -6,7 +6,7 @@
  * automatically.
  *
  * Blend docs:  https://docs.blend.capital
- * Pool IDs:    Run `npm run blend:pools` or check https://testnet.blend.capital
+ * Pool IDs:    Run `pnpm run blend:pools` or check https://testnet.blend.capital
  *
  * Environment variables:
  *   BLEND_POOL_ID      — Blend lending pool contract ID on Stellar Testnet

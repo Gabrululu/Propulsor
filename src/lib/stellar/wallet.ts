@@ -19,12 +19,26 @@ export function generateKeypair(): { publicKey: string; secretKey: string } {
 // ── Friendbot Funding (Testnet Only) ────────────────────────
 
 export async function fundTestnetAccount(publicKey: string): Promise<boolean> {
-  try {
-    const res = await fetch(`${FRIENDBOT_URL}?addr=${encodeURIComponent(publicKey)}`);
-    return res.ok;
-  } catch {
-    return false;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 15000);
+    try {
+      const res = await fetch(`${FRIENDBOT_URL}?addr=${encodeURIComponent(publicKey)}`, {
+        signal: controller.signal,
+      });
+      if (res.ok) return true;
+      // A timed-out request may have funded the account already.
+      const server = await getHorizonServer();
+      await server.loadAccount(publicKey);
+      return true;
+    } catch {
+      // Retry transient network/faucet failures with bounded backoff.
+    } finally {
+      clearTimeout(timeout);
+    }
+    if (attempt < 2) await new Promise((resolve) => setTimeout(resolve, 1000 * 2 ** attempt));
   }
+  throw new Error("ACCOUNT_FUNDING_FAILED");
 }
 
 // ── Balance Queries ─────────────────────────────────────────

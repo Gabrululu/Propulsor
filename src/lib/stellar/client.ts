@@ -61,6 +61,7 @@ interface HorizonClient {
 
 interface SdkModuleShape {
   Horizon?: { Server?: new (url: string) => HorizonClient };
+  rpc?: { Server?: new (url: string) => unknown };
   SorobanRpc?: { Server?: new (url: string) => unknown };
   Soroban?: { Server?: new (url: string) => unknown };
   default?: {
@@ -91,7 +92,7 @@ export async function getSorobanServer(): Promise<unknown> {
   if (!_sorobanServer) {
     try {
       const sdk = await import("@stellar/stellar-sdk") as unknown as SdkModuleShape;
-      const SorobanModule = sdk.SorobanRpc ?? sdk.Soroban ?? sdk.default?.SorobanRpc;
+      const SorobanModule = sdk.rpc ?? sdk.SorobanRpc ?? sdk.Soroban ?? sdk.default?.SorobanRpc;
       if (SorobanModule?.Server) {
         _sorobanServer = new SorobanModule.Server(SOROBAN_RPC_URL);
       }

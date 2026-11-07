@@ -16,7 +16,7 @@
  *     (SPEC.md §3d).
  *
  * Usage:
- *   npx tsx scripts/verify_onchain_consistent_saving.ts \
+ *   pnpm exec tsx scripts/verify_onchain_consistent_saving.ts \
  *     --secret S... \
  *     --contract C...
  *

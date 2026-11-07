@@ -1,369 +1,480 @@
 import { useState, useEffect, useRef } from "react";
-import { errorMessage } from "@/lib/utils";
+import { useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import PercentageSlider from "@/components/PercentageSlider";
-import TerminalBlock from "@/components/TerminalBlock";
-import SpeakerButton from "@/components/voice/SpeakerButton";
-import SoundWaveBars from "@/components/voice/SoundWaveBars";
+import PinInput from "@/components/PinInput";
 import ConnectModal from "@/components/stellar/ConnectModal";
 import { useVoice } from "@/hooks/useVoice";
 import { useAuth } from "@/hooks/useAuth";
 import { useWallet } from "@/lib/stellar/WalletContext";
 import { useContracts } from "@/hooks/useContracts";
-import { supabase } from "@/integrations/supabase/client";
+import { useLanguage } from "@/lib/i18n/LanguageContext";
+import { userError } from "@/lib/userErrors";
 import {
-  ONBOARDING_WELCOME,
-  PROFILE_DESCRIPTIONS,
-  buildSplitConfirmation,
-} from "@/lib/voiceMessages";
+  createDraft,
+  loadDraft,
+  saveDraft,
+  recoverDraft,
+  completeDraft,
+  type OnboardingDraft,
+} from "@/lib/onboarding";
 
-const profileTypes = [
-  { key: "jefa_hogar", icon: "🏠", label: "Responsable del hogar", split: [60, 30, 10] },
-  { key: "emprendedora", icon: "🛍️", label: "Negocio propio", split: [40, 30, 30] },
-  { key: "trabajadora", icon: "💼", label: "Empleo fijo", split: [50, 35, 15] },
-  { key: "freelancer", icon: "💻", label: "Freelancer", split: [45, 30, 25] },
-];
-
-const Onboarding = () => {
+export default function Onboarding() {
+  const { language } = useLanguage();
+  const text = (es: string, en: string) => (language === "es" ? es : en);
+  const profiles = [
+    {
+      key: "jefa_hogar",
+      label: text("Responsable del hogar", "Household manager"),
+      description: text(
+        "Gestionas los gastos del hogar y cuidas a tu familia.",
+        "You manage household expenses and care for your family.",
+      ),
+      split: [60, 30, 10],
+    },
+    {
+      key: "emprendedora",
+      label: text("Negocio propio", "Business owner"),
+      description: text(
+        "Tienes tu propio negocio o vendes por tu cuenta.",
+        "You run a business or sell independently.",
+      ),
+      split: [40, 30, 30],
+    },
+    {
+      key: "trabajadora",
+      label: text("Empleo fijo", "Regular employment"),
+      description: text(
+        "Recibes un sueldo fijo cada quincena o mes.",
+        "You receive a regular salary.",
+      ),
+      split: [50, 35, 15],
+    },
+    {
+      key: "freelancer",
+      label: text("Trabajo independiente", "Freelancer"),
+      description: text(
+        "Tus ingresos varían según tus proyectos.",
+        "Your income varies with your projects.",
+      ),
+      split: [45, 30, 25],
+    },
+  ];
   const [step, setStep] = useState(0);
   const [name, setName] = useState("");
   const [profileType, setProfileType] = useState("");
   const [percentages, setPercentages] = useState([60, 30, 10]);
-  const [vaultNames, setVaultNames] = useState(["Hogar", "Fondo seguro", "Meta grande"]);
-  const [deploying, setDeploying] = useState(false);
-  const [deployDone, setDeployDone] = useState(false);
-  const [stellarPublicKey, setStellarPublicKey] = useState("");
+  const [vaultNames, setVaultNames] = useState<string[] | null>(null);
+  const names = vaultNames ?? [
+    text("Hogar", "Home"),
+    text("Fondo seguro", "Safety fund"),
+    text("Meta grande", "Big goal"),
+  ];
   const [pin, setPin] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [done, setDone] = useState(false);
+  const [error, setError] = useState("");
+  // Keep a confirmed transaction across profile-save retries. Never sign twice just to save a profile.
   const [txHash, setTxHash] = useState("");
-  const [terminalLines, setTerminalLines] = useState<
-    { text: string; color?: "pink" | "mint" | "dimmed" | "default" }[]
-  >([]);
-  const [deployError, setDeployError] = useState("");
-
+  const [journal, setJournal] = useState<OnboardingDraft | null>(null);
+  const [ready, setReady] = useState(false);
+  const [recoveryFailed, setRecoveryFailed] = useState(false);
+  const [reload, setReload] = useState(0);
+  const inFlight = useRef(false);
+  const heading = useRef<HTMLHeadingElement>(null);
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const { speak, stop, isSpeaking } = useVoice();
   const { user } = useAuth();
-  const { mode, publicKey: walletPublicKey } = useWallet();
+  const { mode, publicKey } = useWallet();
   const contracts = useContracts();
-  const welcomePlayed = useRef(false);
-
-  const totalSteps = 4;
   const isCustodial = mode === "custodial";
+  const welcome = text(
+    "Te damos la bienvenida a Propulsor. Te ayudaremos a separar tu dinero en tres espacios para tus gastos y metas. Puedes escuchar las instrucciones con los botones de voz.",
+    "Welcome to Propulsor. We will help you split your money into three spaces for expenses and goals. Use the audio buttons to hear instructions.",
+  );
+  const pinHelp = text(
+    "Ingresa el PIN que creaste para autorizar este reparto. Si lo olvidaste, no podremos recuperar el acceso con este PIN.",
+    "Enter the PIN you created to authorize this split. If you forgot it, we cannot recover access using this PIN.",
+  );
+  useEffect(() => {
+    if (step === 2 && publicKey && mode) setStep(3);
+  }, [step, publicKey, mode]);
+  useEffect(() => {
+    heading.current?.focus();
+  }, [step, done]);
 
   useEffect(() => {
-    if (step === 0 && !welcomePlayed.current) {
-      welcomePlayed.current = true;
-      const timer = setTimeout(() => speak(ONBOARDING_WELCOME), 600);
-      return () => clearTimeout(timer);
+    let cancelled = false;
+    setReady(false);
+    setRecoveryFailed(false);
+    if (!user?.id || !publicKey) {
+      setReady(true);
+      return;
     }
-  }, [step, speak]);
+    loadDraft(user.id, publicKey)
+      .then((draft) => {
+        if (cancelled || !draft) return;
+        setJournal(draft);
+        setName(draft.name);
+        setProfileType(draft.profileType);
+        setVaultNames(draft.vaultNames);
+        setPercentages(draft.percentages);
+        setStep(3);
+      })
+      .catch((err) => {
+        if (!cancelled) {
+          setError(userError(err, language));
+          setRecoveryFailed(true);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setReady(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.id, publicKey, language, reload]);
 
-  // Auto-advance past wallet connect step if wallet is already connected
-  useEffect(() => {
-    if (step === 2 && walletPublicKey && mode) {
-      setStellarPublicKey(walletPublicKey);
-      setStep(3);
-    }
-  }, [step, walletPublicKey, mode]);
-
-  const handleProfileSelect = (key: string) => {
-    setProfileType(key);
-    const found = profileTypes.find((p) => p.key === key);
-    if (found) setPercentages(found.split);
-  };
-
-  const handleProfileHover = (key: string) => {
-    const desc = PROFILE_DESCRIPTIONS[key];
-    if (desc) speak(desc);
-  };
-
-  const handleWalletConnected = (mode: "custodial" | "external", publicKey: string) => {
-    setStellarPublicKey(publicKey);
-    setTimeout(() => setStep(3), 800);
-  };
-
-  const addLine = (text: string, color?: "pink" | "mint" | "dimmed" | "default") => {
-    setTerminalLines((prev) => [...prev, { text, color }]);
-  };
-
-  const handleDeploy = async () => {
-    if (isCustodial && !pin) return;
-    setDeploying(true);
-    setDeployError("");
-    setTerminalLines([
-      { text: "Creando tus bóvedas...", color: "pink" },
-      { text: "Creando 3 bóvedas...", color: "default" },
-      { text: `→ ${vaultNames[0]} (${percentages[0]}%)`, color: "pink" },
-      { text: `→ ${vaultNames[1]} (${percentages[1]}%)`, color: "mint" },
-      { text: `→ ${vaultNames[2]} (${percentages[2]}%)`, color: "pink" },
-      { text: "", color: "default" },
-    ]);
-
+  const deploy = async () => {
+    if (
+      inFlight.current ||
+      !ready ||
+      recoveryFailed ||
+      (isCustodial && !txHash && !journal?.transaction && pin.length !== 4)
+    )
+      return;
+    inFlight.current = true;
+    setBusy(true);
+    setError("");
     try {
-      // Save profile to Supabase
-      if (user) {
-        const profileData: Record<string, unknown> = {
-          id: user.id,
-          name: name.trim(),
-          profile_type: (["jefa_hogar", "emprendedora", "trabajadora", "freelancer"].includes(profileType) ? profileType : null) as never,
-          onboarding_complete: true,
-        };
-        if (stellarPublicKey) profileData.stellar_public_key = stellarPublicKey;
-
-        const { error } = await supabase
-          .from("users_profile")
-          .upsert(profileData as never, { onConflict: "id" });
-        if (error) console.error("Failed to save profile:", error.message);
+      if (!user || !publicKey) throw new Error("PROFILE_SAVE_FAILED");
+      let draft =
+        journal ??
+        createDraft({
+          publicKey,
+          name,
+          profileType: profileType as OnboardingDraft["profileType"],
+          vaultNames: names,
+          percentages,
+        });
+      let hash = txHash;
+      if (!hash && draft.transaction) {
+        const status = await recoverDraft(draft);
+        if (status === "pending") throw new Error("TRANSACTION_PENDING");
+        if (status === "retry") {
+          const previousHash = draft.transaction.hash;
+          draft = { ...draft, transaction: undefined };
+          await saveDraft(user.id, draft, previousHash);
+          setJournal(draft);
+          throw new Error("TRANSACTION_RETRY");
+        }
+        hash = draft.transaction.hash;
+        setTxHash(hash);
       }
-
-      addLine("Guardando tus reglas de reparto...", "default");
-
-      const rules = percentages.map((pct, i) => ({ vault_id: i, percentage: pct }));
-      const hash = await contracts.setRules(
-        rules,
-        isCustodial ? pin : undefined,
-        (msg) => addLine(msg, "dimmed")
+      if (!hash) {
+        // Save the intent before signing; persist its hash before broadcasting.
+        draft = createDraft({
+          publicKey,
+          name,
+          profileType: profileType as OnboardingDraft["profileType"],
+          vaultNames: names,
+          percentages,
+        });
+        await saveDraft(user.id, draft);
+        setJournal(draft);
+        hash = await contracts.setRules(
+          draft.percentages.map((percentage, vault_id) => ({
+            vault_id,
+            percentage,
+          })),
+          isCustodial ? pin : undefined,
+          undefined,
+          async (transaction) => {
+            draft = { ...draft, transaction };
+            await saveDraft(user.id, draft);
+            setJournal(draft);
+          },
+        );
+        setTxHash(hash);
+      }
+      await completeDraft(user.id, draft, hash);
+      await queryClient.invalidateQueries({
+        queryKey: ["onboarding", user.id],
+      });
+      setDone(true);
+      speak(
+        text(
+          "Tu reparto está configurado. Puedes continuar a tu cuenta.",
+          "Your split is configured. You can continue to your account.",
+        ),
       );
-
-      setTxHash(hash);
-      const shortHash = `${hash.slice(0, 8)}...${hash.slice(-4)}`;
-      addLine(`→ Comprobante: ${shortHash} ✓`, "mint");
-
-      // Persist tx hash to Supabase for audit trail
-      if (user) {
-        await supabase
-          .from("users_profile")
-          .update({ split_contract_tx: hash } as never)
-          .eq("id", user.id);
-      }
-
-      setDeployDone(true);
-      const msg = buildSplitConfirmation(vaultNames, percentages);
-      setTimeout(() => speak(msg), 600);
-      setTimeout(() => navigate("/dashboard"), 4500);
-    } catch (err: unknown) {
-      const message = errorMessage(err);
-      setDeployError(message);
-      addLine(`✗ Error: ${message}`, "dimmed");
-      setDeploying(false);
+    } catch (err) {
+      const message = userError(err, language);
+      setError(message);
+      speak(message);
+    } finally {
+      setPin("");
+      setBusy(false);
+      inFlight.current = false;
     }
   };
-
+  const titles = [
+    text("Protege tu dinero", "Protect your money"),
+    text("Configura tu perfil", "Set up your profile"),
+    text("Crea o conecta tu cuenta", "Create or connect your account"),
+    text("Define tu reparto", "Set your split"),
+  ];
   return (
-    <div className="min-h-screen bg-background flex items-center justify-center p-6">
-      <div className="w-full max-w-lg">
-        {/* Progress */}
-        <div className="flex gap-2 mb-8">
-          {Array.from({ length: totalSteps }).map((_, s) => (
+    <main
+      className="min-h-screen bg-background flex items-center justify-center p-4 sm:p-6"
+      lang={language}
+    >
+      <div className="w-full max-w-lg space-y-6" aria-busy={busy}>
+        <div
+          role="progressbar"
+          aria-label={text("Configuración de tu cuenta", "Account setup")}
+          aria-valuemin={1}
+          aria-valuemax={4}
+          aria-valuenow={step + 1}
+          className="flex gap-2"
+        >
+          {[0, 1, 2, 3].map((s) => (
             <div
               key={s}
-              className="flex-1 h-1 rounded-sm transition-colors"
-              style={{ backgroundColor: s <= step ? "hsl(var(--primary))" : "hsl(var(--background-hover))" }}
+              className={`flex-1 h-2 rounded-sm ${s <= step ? "bg-primary" : "bg-muted"}`}
             />
           ))}
         </div>
-
-        {/* Step 0: Welcome */}
-        {step === 0 && (
-          <div className="relative">
-            <div className="absolute top-0 right-0">
-              <SpeakerButton
-                isSpeaking={isSpeaking}
-                onClick={() => { if (isSpeaking) stop(); else speak(ONBOARDING_WELCOME); }}
-              />
-            </div>
-            <span className="font-mono text-xs text-muted-foreground tracking-widest">PASO 1 DE {totalSteps}</span>
-            <h1 className="text-3xl md:text-4xl font-bold mt-2 mb-4">
-              <span className="text-foreground">EMPIEZA A</span>{" "}
-              <span className="text-primary">PROTEGER TU DINERO</span>
-            </h1>
-            <p className="text-muted-foreground text-sm mb-8 leading-relaxed">
-              Propulsor separa tu dinero automáticamente en bóvedas inteligentes. Sin banco. Sin permiso. Solo tú y tu código.
-            </p>
-            <button onClick={() => setStep(1)} className="btn-pink w-full rounded-sm text-center">
-              Empezar →
-            </button>
-          </div>
-        )}
-
-        {/* Step 1: Profile */}
-        {step === 1 && (
-          <div>
-            <span className="font-mono text-xs text-muted-foreground tracking-widest">PASO 2 DE {totalSteps}</span>
-            <h1 className="text-3xl font-bold mt-2 mb-6">
-              <span className="text-foreground">CONFIGURA TU </span>
-              <span className="text-primary">PERFIL</span>
-            </h1>
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm text-foreground font-semibold uppercase tracking-wider mb-2">Tu nombre</label>
-                <input
-                  type="text"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  className="w-full bg-card border border-border rounded-sm px-4 py-3 text-foreground text-sm focus:outline-none focus:ring-1 focus:ring-primary"
-                  placeholder="¿Cómo te llamas?"
-                />
-              </div>
-              <div>
-                <label className="block text-sm text-foreground font-semibold uppercase tracking-wider mb-3">¿Cómo te describes?</label>
-                <div className="grid grid-cols-2 gap-3">
-                  {profileTypes.map((p) => (
-                    <button
-                      key={p.key}
-                      onClick={() => handleProfileSelect(p.key)}
-                      onMouseEnter={() => handleProfileHover(p.key)}
-                      onTouchStart={() => handleProfileHover(p.key)}
-                      className={`p-4 rounded-sm border text-left transition-colors ${
-                        profileType === p.key ? "border-primary bg-card" : "border-border hover:bg-muted"
-                      }`}
-                    >
-                      <span className="text-2xl block mb-1">{p.icon}</span>
-                      <span className="text-sm text-foreground">{p.label}</span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </div>
-            <button
-              onClick={() => setStep(2)}
-              disabled={!name.trim() || !profileType}
-              className="btn-pink w-full rounded-sm mt-6"
-              style={{ opacity: !name.trim() || !profileType ? 0.4 : 1 }}
-            >
-              Siguiente →
-            </button>
-          </div>
-        )}
-
-        {/* Step 2: Connect Wallet */}
-        {step === 2 && (
-          <div>
-            <span className="font-mono text-xs text-muted-foreground tracking-widest">PASO 3 DE {totalSteps}</span>
-            <h1 className="text-2xl font-bold mt-2 mb-6">
-              <span className="text-foreground">ELIGE CÓMO </span>
-              <span className="text-primary">CONECTARTE</span>
-            </h1>
-            <p className="text-muted-foreground text-sm mb-6 leading-relaxed">
-              Puedes empezar sin wallet — nosotros creamos tu cuenta Stellar.
-            </p>
-            <ConnectModal embedded={true} onConnected={handleWalletConnected} />
-          </div>
-        )}
-
-        {/* Step 3: Vaults */}
-        {step === 3 && !deploying && (
-          <div>
-            <span className="font-mono text-xs text-muted-foreground tracking-widest">PASO 4 DE {totalSteps}</span>
-            <h1 className="text-3xl font-bold mt-2 mb-6">
-              <span className="text-foreground">DEFINE TUS </span>
-              <span className="text-primary">BÓVEDAS</span>
-            </h1>
-            <div className="space-y-4 mb-6">
-              {vaultNames.map((vn, i) => (
-                <div key={i} className="flex items-center gap-3">
-                  <span className="text-xl">{["🏠", "🔒", "🚀"][i]}</span>
-                  <input
-                    type="text"
-                    value={vn}
-                    onChange={(e) => {
-                      const next = [...vaultNames];
-                      next[i] = e.target.value;
-                      setVaultNames(next);
-                    }}
-                    className="flex-1 bg-card border border-border rounded-sm px-3 py-2 text-foreground text-sm focus:outline-none focus:ring-1 focus:ring-primary"
-                  />
-                </div>
-              ))}
-            </div>
-            <PercentageSlider
-              values={percentages}
-              labels={vaultNames}
-              colors={["pink", "mint", "pink-soft"]}
-              onChange={setPercentages}
-            />
-
-            {/* PIN field for custodial wallets */}
-            {isCustodial && (
-              <div className="mt-6">
-                <label className="block text-xs font-mono text-muted-foreground uppercase tracking-widest mb-2">
-                  Confirma tu PIN para continuar
-                </label>
-                <input
-                  type="password"
-                  inputMode="numeric"
-                  maxLength={4}
-                  value={pin}
-                  onChange={(e) => setPin(e.target.value.replace(/\D/g, ""))}
-                  className="w-full bg-card border border-border rounded-sm px-4 py-3 text-foreground text-center text-xl tracking-[1rem] focus:outline-none focus:ring-1 focus:ring-primary"
-                  placeholder="••••"
-                />
-              </div>
+        <p role="status" className="text-sm text-muted-foreground">
+          {text("Paso", "Step")} {step + 1} {text("de", "of")} 4
+        </p>
+        <h1
+          ref={heading}
+          tabIndex={-1}
+          className="text-3xl font-bold focus:outline-none"
+        >
+          {done
+            ? text("Tu reparto está listo", "Your split is ready")
+            : titles[step]}
+        </h1>
+        {error && (
+          <div role="alert" className="border border-destructive p-4 space-y-2">
+            <p>{error}</p>
+            {txHash && (
+              <p>
+                {text(
+                  "El reparto ya se confirmó. Reintentar solo guardará tu perfil.",
+                  "Your split is confirmed. Retrying will only save your profile.",
+                )}
+              </p>
             )}
-
-            <button
-              onClick={handleDeploy}
-              disabled={isCustodial && pin.length < 4}
-              className="btn-pink w-full rounded-sm mt-8"
-              style={{ opacity: isCustodial && pin.length < 4 ? 0.4 : 1 }}
-            >
-              Crear mis bóvedas →
-            </button>
           </div>
         )}
-
-        {/* Deploying / Success */}
-        {deploying && (
-          <div className="text-center">
-            <TerminalBlock title="propulsor :: creando tus bóvedas" lines={terminalLines} />
-
-            {deployError && !deployDone && (
-              <div className="mt-4">
-                <p className="text-xs font-mono text-dimmed mb-2">
-                  {deployError}
+        {!ready ? (
+          <p role="status">
+            {text("Recuperando tu configuración…", "Restoring your setup…")}
+          </p>
+        ) : recoveryFailed ? (
+          <button
+            className="btn-pink w-full"
+            onClick={() => setReload((value) => value + 1)}
+          >
+            {text("Reintentar recuperación", "Retry recovery")}
+          </button>
+        ) : done ? (
+          <button
+            className="btn-pink w-full"
+            onClick={() => navigate("/dashboard")}
+          >
+            {text("Ir a mi cuenta", "Go to my account")}
+          </button>
+        ) : (
+          <>
+            {step === 0 && (
+              <>
+                <p>{welcome}</p>
+                <p className="text-sm text-muted-foreground">
+                  {text(
+                    "Esta es una prueba: los fondos no son dinero real.",
+                    "This is a test: funds are not real money.",
+                  )}
                 </p>
                 <button
-                  onClick={() => { setDeploying(false); setTerminalLines([]); }}
-                  className="font-mono text-[0.6rem] uppercase tracking-wider text-primary hover:opacity-80 transition-opacity"
+                  className="min-h-11 text-primary"
+                  onClick={() => (isSpeaking ? stop() : speak(welcome))}
                 >
-                  Reintentar
+                  {isSpeaking
+                    ? text("Detener audio", "Stop audio")
+                    : text("Escuchar bienvenida", "Listen to welcome")}
                 </button>
-              </div>
+                <button className="btn-pink w-full" onClick={() => setStep(1)}>
+                  {text("Empezar", "Start")}
+                </button>
+              </>
             )}
-
-            {deployDone && (
-              <div className="mt-6 flex flex-col items-center gap-3">
-                <SoundWaveBars isActive={isSpeaking} />
-                <p className="text-muted-foreground text-sm">Tu dinero ya está protegido.</p>
-                {txHash && (
-                  <a
-                    href={`https://stellar.expert/explorer/testnet/tx/${txHash}`}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="font-mono text-[0.6rem] text-mint hover:opacity-80 transition-opacity"
-                  >
-                    Ver en Stellar Expert →
-                  </a>
+            {step === 1 && (
+              <>
+                <label htmlFor="onboarding-name" className="block">
+                  {text("Tu nombre", "Your name")}
+                </label>
+                <input
+                  id="onboarding-name"
+                  autoComplete="given-name"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  className="w-full min-h-12 bg-card border border-border p-3"
+                />
+                <fieldset>
+                  <legend className="mb-3">
+                    {text(
+                      "¿Cómo te describes?",
+                      "How do you describe yourself?",
+                    )}
+                  </legend>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {profiles.map((p) => (
+                      <div
+                        key={p.key}
+                        className="border border-border p-3 space-y-2"
+                      >
+                        <button
+                          className="min-h-12 w-full text-left"
+                          aria-pressed={profileType === p.key}
+                          onClick={() => {
+                            setProfileType(p.key);
+                            setPercentages(p.split);
+                          }}
+                        >
+                          {profileType === p.key ? "✓ " : ""}
+                          {p.label}
+                        </button>
+                        <button
+                          aria-label={`${text("Escuchar descripción", "Listen to description")}: ${p.label}`}
+                          className="min-h-11 text-primary text-sm"
+                          onClick={() => speak(p.description)}
+                        >
+                          {text(
+                            "Escuchar descripción",
+                            "Listen to description",
+                          )}
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </fieldset>
+                <button
+                  disabled={!name.trim() || !profileType}
+                  className="btn-pink w-full"
+                  onClick={() => setStep(2)}
+                >
+                  {text("Siguiente", "Next")}
+                </button>
+              </>
+            )}
+            {step === 2 && (
+              <ConnectModal embedded onConnected={() => setStep(3)} />
+            )}
+            {step === 3 && (
+              <>
+                <p>
+                  {text(
+                    "Cada espacio (o bóveda) reserva una parte para tus gastos o metas. Al cambiar una barra, las otras se ajustan para sumar 100%.",
+                    "Each space (or vault) reserves a share for expenses or goals. Changing one slider adjusts the others to total 100%.",
+                  )}
+                </p>
+                <fieldset
+                  disabled={busy || !!txHash || !!journal?.transaction}
+                  className="space-y-4"
+                >
+                  <legend className="sr-only">
+                    {text("Nombres y porcentajes", "Names and percentages")}
+                  </legend>
+                  {names.map((value, i) => (
+                    <div key={i}>
+                      <label
+                        htmlFor={`vault-${i}`}
+                        className="block text-sm mb-1"
+                      >
+                        {text("Espacio", "Space")} {i + 1}
+                      </label>
+                      <input
+                        id={`vault-${i}`}
+                        value={value}
+                        onChange={(e) => {
+                          const next = [...names];
+                          next[i] = e.target.value;
+                          setVaultNames(next);
+                        }}
+                        className="min-h-12 w-full bg-card border border-border p-3"
+                      />
+                    </div>
+                  ))}
+                  <PercentageSlider
+                    values={percentages}
+                    labels={names}
+                    colors={["pink", "mint", "pink-soft"]}
+                    onChange={setPercentages}
+                  />
+                </fieldset>
+                {isCustodial && !txHash && !journal?.transaction && (
+                  <>
+                    <PinInput
+                      label={text(
+                        "Autoriza el reparto con tu PIN",
+                        "Authorize the split with your PIN",
+                      )}
+                      value={pin}
+                      onChange={setPin}
+                      description={pinHelp}
+                      disabled={busy}
+                    />
+                    <button
+                      className="min-h-11 text-primary"
+                      onClick={() => speak(pinHelp)}
+                    >
+                      {text(
+                        "Escuchar instrucciones del PIN",
+                        "Listen to PIN instructions",
+                      )}
+                    </button>
+                  </>
+                )}
+                {busy && (
+                  <p role="status">
+                    {txHash
+                      ? text("Guardando tu perfil…", "Saving your profile…")
+                      : text(
+                          "Preparando y confirmando tu reparto. Espera un momento…",
+                          "Preparing and confirming your split. Please wait…",
+                        )}
+                  </p>
                 )}
                 <button
-                  onClick={() => {
-                    const msg = buildSplitConfirmation(vaultNames, percentages);
-                    speak(msg);
-                  }}
-                  className="font-mono text-[0.6rem] uppercase tracking-wider text-muted-foreground hover:text-primary transition-colors"
+                  className="btn-pink w-full"
+                  disabled={
+                    busy ||
+                    (!txHash &&
+                      !journal?.transaction &&
+                      isCustodial &&
+                      pin.length !== 4) ||
+                    names.some((n) => !n.trim())
+                  }
+                  onClick={deploy}
                 >
-                  🔊 Escuchar de nuevo
+                  {busy
+                    ? text("Guardando…", "Saving…")
+                    : journal?.transaction && !txHash
+                      ? text("Comprobar y continuar", "Check and continue")
+                      : error
+                        ? text("Reintentar", "Retry")
+                        : text("Guardar mi reparto", "Save my split")}
                 </button>
-              </div>
+              </>
             )}
-            {!deployDone && !deployError && (
-              <p className="text-muted-foreground text-sm mt-6">Preparando tu espacio...</p>
-            )}
-          </div>
+          </>
         )}
       </div>
-    </div>
+    </main>
   );
-};
-
-export default Onboarding;
+}

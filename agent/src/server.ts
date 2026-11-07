@@ -88,8 +88,7 @@ app.options('*', (_req, res) => res.sendStatus(204));
 // ---------------------------------------------------------------------------
 
 app.use(
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  (paymentMiddlewareFromConfig as any)(
+  paymentMiddlewareFromConfig(
     {
       'POST /execute-split': {
         accepts: {

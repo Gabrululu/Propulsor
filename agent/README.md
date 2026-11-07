@@ -52,7 +52,7 @@ Request testnet USDC from the [Circle Testnet Faucet](https://faucet.circle.com/
 
 ```bash
 cd agent
-npm install
+pnpm install --frozen-lockfile
 ```
 
 ## Configuration
@@ -105,7 +105,7 @@ Generate a random key: `node -e "console.log(require('crypto').randomBytes(32).t
 
 After first deploy, open **Railway → Service → Shell** and run:
 ```bash
-npm run setup
+pnpm run setup
 ```
 This registers the 60/30/10 split rules on-chain under the server's address.
 
@@ -155,7 +155,7 @@ account (see `.env.monitor.example` for the full rationale and variable list).
 Before the server can execute splits, the server's Stellar address must have rules configured on-chain. Run the setup script once:
 
 ```bash
-npm run setup
+pnpm run setup
 ```
 
 Default rules (edit `src/setup.ts` to change):
@@ -171,10 +171,10 @@ Default rules (edit `src/setup.ts` to change):
 
 ```bash
 # Development (hot reload)
-npm run dev
+pnpm run dev
 
 # Production
-npm run build && npm start
+pnpm run build && pnpm start
 ```
 
 Server starts on `http://localhost:3001`.
@@ -302,12 +302,12 @@ The monitor also notifies `agent-webhook` for every account newly added to the w
 
 **Terminal 1** — start the server:
 ```bash
-npm run dev
+pnpm run dev
 ```
 
 **Terminal 2** — start the monitor:
 ```bash
-npm run monitor
+pnpm run monitor
 ```
 
 `AGENT_SECRET` defaults to `SERVER_STELLAR_SECRET` from `.env`. `SUPABASE_URL` and `AGENT_WEBHOOK_SECRET` are required — without them the monitor has no way to fetch the watchlist or report activity, so it exits immediately with a clear error.
@@ -452,7 +452,7 @@ Then fund it with testnet USDC from **[faucet.circle.com](https://faucet.circle.
 #### Step 4 — Run the monitor
 
 ```bash
-npm run monitor
+pnpm run monitor
 ```
 
 If configured correctly, the startup log will show:
