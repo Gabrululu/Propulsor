@@ -30,11 +30,14 @@ jobs:
           echo "$HOME/.risc0/bin" >> "$GITHUB_PATH"
 
       # Must match risc0-zkvm in zk/risc0/consistent_saving/host/Cargo.toml. The
-      # guest itself builds in Docker, so its image ID doesn't depend on this.
+      # guest builds in Docker (r0.1.97.0), but risc0-build still reads the
+      # installed RISC Zero Rust version to pick a compiler flag (anything above
+      # 1.81 gives the same flag), so install the same version the image uses.
       - name: rzup install
         run: |
           rzup install cargo-risczero 3.0.6
           rzup install r0vm 3.0.6
+          rzup install rust 1.97.0
 
       - name: Generate Groth16 proof (RISC Zero host — several minutes)
         working-directory: zk/risc0/consistent_saving

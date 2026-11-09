@@ -109,6 +109,12 @@ export interface InvokeResult {
 }
 
 const WALLET_SIGNING_WINDOW_S = 300;
+// Flows that record the hash before sending (onboarding) wait for an
+// interrupted attempt to expire before offering a new one, so they use a
+// shorter window, still long enough to approve in an external wallet.
+const JOURNALED_SIGNING_WINDOW_S = 120;
+// Seconds a signed transaction needs left to reach the network.
+const MIN_TIME_LEFT_S = 5;
 const SEND_RETRIES = 5;
 const SEND_RETRY_DELAY_MS = 2000;
 
@@ -148,9 +154,7 @@ export async function invoke(
     networkPassphrase: NETWORK_PASSPHRASE,
   })
     .addOperation(contract.call(method, ...args))
-    // beforeSubmit flows recover an interrupted attempt only once it expires, so
-    // keep that wait short. Everything else leaves time to confirm in a wallet.
-    .setTimeout(beforeSubmit ? 30 : WALLET_SIGNING_WINDOW_S)
+    .setTimeout(beforeSubmit ? JOURNALED_SIGNING_WINDOW_S : WALLET_SIGNING_WINDOW_S)
     .build();
 
   const sim = await server.simulateTransaction(tx);
@@ -170,10 +174,17 @@ export async function invoke(
     "innerTransaction" in signedTx
       ? signedTx.innerTransaction.timeBounds
       : signedTx.timeBounds;
+  const expiresAt = Number(timeBounds?.maxTime ?? 0);
+  // Approving in a wallet can take longer than the transaction is valid for.
+  // Stop here rather than send it to be rejected, and before its hash is
+  // recorded, so the user can simply try again.
+  if (expiresAt && Date.now() / 1000 > expiresAt - MIN_TIME_LEFT_S) {
+    throw new Error("SIGNATURE_EXPIRED");
+  }
   const hash = Array.from(signedTx.hash(), (byte) =>
     byte.toString(16).padStart(2, "0"),
   ).join("");
-  await beforeSubmit?.({ hash, expiresAt: Number(timeBounds?.maxTime ?? 0) });
+  await beforeSubmit?.({ hash, expiresAt });
   const response = await sendWithRetry(server, signedTx as S.Transaction);
 
   onProgress?.("Confirmando en el ledger...");

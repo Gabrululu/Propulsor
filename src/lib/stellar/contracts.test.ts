@@ -79,6 +79,42 @@ describe("transaction journaling", () => {
     expect(persist).toHaveBeenCalledOnce();
     expect(mocks.server.sendTransaction).toHaveBeenCalledOnce();
   });
+  it("doesn't record or send a transaction signed after it expired", async () => {
+    const realNow = Date.now();
+    const slowSign = async (xdr: string) => {
+      // The user takes three minutes to approve in their wallet
+      vi.spyOn(Date, "now").mockReturnValue(realNow + 180_000);
+      return sign(xdr);
+    };
+    const persist = vi.fn();
+    try {
+      await expect(
+        setRules(
+          keypair.publicKey(),
+          [60, 30, 10].map((percentage, vault_id) => ({ percentage, vault_id })),
+          slowSign,
+          undefined,
+          persist,
+        ),
+      ).rejects.toThrow("SIGNATURE_EXPIRED");
+    } finally {
+      vi.restoreAllMocks();
+    }
+    expect(persist).not.toHaveBeenCalled();
+    expect(mocks.server.sendTransaction).not.toHaveBeenCalled();
+  });
+  it("gives a wallet two minutes to approve onboarding", async () => {
+    const persist = vi.fn();
+    const start = Date.now() / 1000;
+    await setRules(
+      keypair.publicKey(),
+      [60, 30, 10].map((percentage, vault_id) => ({ percentage, vault_id })),
+      sign,
+      undefined,
+      persist,
+    );
+    expect(persist.mock.calls[0][0].expiresAt - start).toBeGreaterThanOrEqual(119);
+  });
   it("resends a transaction the network asked to try again later", async () => {
     vi.useFakeTimers();
     mocks.server.sendTransaction
