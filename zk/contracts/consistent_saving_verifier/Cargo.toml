@@ -9,10 +9,10 @@ crate-type = ["cdylib"]
 [dependencies]
 # BN254 host functions (g1_add/g1_mul/g1_msm/pairing_check) require CAP-0074,
 # which shipped in Protocol 25 — soroban-sdk >= 25.0.0. See SPEC.md.
-soroban-sdk = { version = "=27.0.6", features = ["alloc"] }
+soroban-sdk = { version = "=29.0.1", features = ["alloc"] }
 
 [dev-dependencies]
-soroban-sdk = { version = "=27.0.6", features = ["testutils"] }
+soroban-sdk = { version = "=29.0.1", features = ["testutils"] }
 
 [profile.release]
 opt-level = "z"

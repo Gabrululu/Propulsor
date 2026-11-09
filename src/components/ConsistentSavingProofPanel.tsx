@@ -10,15 +10,14 @@ const ConsistentSavingProofPanel = () => {
     <div className="rounded-sm border border-border bg-card p-5 space-y-4">
       <div>
         <span className="font-mono text-[0.65rem] uppercase tracking-widest text-primary">
-          → PRUEBA PRIVADA
+          → PRUEBA VERIFICABLE
         </span>
         <h3 className="text-lg font-bold text-foreground mt-1">
           Prueba de ahorro constante
         </h3>
         <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
-          Demuestra que ahorraste en al menos 6 de los últimos 12 meses{" "}
-          <span className="text-foreground font-semibold">sin revelar ningún monto</span>.
-          La generación tarda varios minutos — corre en un servidor, no en tu dispositivo.
+          Demuestra que hiciste separaciones en al menos 6 de los últimos 12 meses. El enlace no muestra
+          montos, pero tu historial se registra en una red pública. La generación tarda varios minutos — corre en un servidor, no en tu dispositivo.
         </p>
       </div>
 

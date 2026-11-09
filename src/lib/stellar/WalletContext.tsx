@@ -27,7 +27,7 @@ interface WalletState {
 
   connectCustodial: (userId: string, pin: string) => Promise<string>;
   connectSocial: (userId: string) => Promise<string>;
-  connectExternal: (walletId: WalletId) => Promise<void>;
+  connectExternal: (walletId: WalletId) => Promise<string>;
   reconnect: (pk: string, mode: WalletMode) => void;
   disconnect: () => void;
   signTransaction: (txXdr: string, pin?: string) => Promise<string>;
@@ -122,7 +122,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
 
   // ── External wallet connect ─────────────────────────────
   const connectExternal = useCallback(
-    async (wId: WalletId) => {
+    async (wId: WalletId): Promise<string> => {
       setIsConnecting(true);
       try {
         kit.setWallet(wId);
@@ -132,6 +132,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         setPublicKey(address);
         setWalletId(wId);
         persist("external", address, wId);
+        return address;
       } finally {
         setIsConnecting(false);
       }

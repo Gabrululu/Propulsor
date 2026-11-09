@@ -20,8 +20,8 @@ Propulsor is a programmable financial management platform for the informal econo
 - **Programmable vaults** — income is split by user-defined percentage rules (e.g. 60% spending / 30% emergency / 10% savings) and enforced on-chain via the `SplitProtocol` Soroban contract.
 - **Time & goal locks** — the `TimeVault` contract can lock a vault until a date or until it reaches a savings goal, whichever comes first.
 - **Agentic payments (x402)** — an autonomous agent detects incoming remittances the instant they land on-chain and executes the split without any user action, closing the window that social/family pressure could otherwise exploit. See [Agentic Payments Layer](./ARCHITECTURE.md#agentic-payments-layer).
-- **Automatic yield** — the savings vault is deposited into **Blend Protocol** right after every split, earning yield from minute one.
-- **Zero-knowledge privacy layer** — users can prove savings claims (e.g. "my savings vault holds ≥ $50") **without revealing their actual balance**, using a Groth16/BLS12-381 proof verified on-chain. See [ZK Privacy Layer](./ARCHITECTURE.md#zk-privacy-layer).
+- **Yield** — users can deposit savings into **Blend** or **DeFindex** and withdraw at any time, signing from their own account. On testnet this uses Blend's test USDC, separate from remittance USDC. See [ARCHITECTURE.md](./ARCHITECTURE.md#yield).
+- **Verifiable savings proofs** — users can prove savings claims (e.g. "my savings vault holds ≥ $50") with Groth16 proofs verified on-chain, bound to their account and checked against their on-chain vaults. Vault balances themselves are public on Stellar today, so these proofs do not hide them. See [ARCHITECTURE.md](./ARCHITECTURE.md#zk-privacy-layer).
 - **Voice accessibility** — key flows are narrated via ElevenLabs TTS for users with low digital literacy.
 - **Bilingual** — the product ships in Spanish and English (`src/lib/i18n`).
 
@@ -38,7 +38,7 @@ Propulsor is a programmable financial management platform for the informal econo
 | Smart Contracts | Soroban (Rust) |
 | Stellar SDK | `@stellar/stellar-sdk` |
 | Agentic Payments | x402 protocol (`@x402/stellar`, `@x402/express`) |
-| Yield | Blend Protocol |
+| Yield | Blend Protocol, DeFindex |
 | Zero-Knowledge | Circom + Groth16 (snarkjs) · RISC Zero zkVM |
 | Voice / Accessibility | ElevenLabs API (`eleven_multilingual_v2`) |
 | UI Platform | Lovable |
@@ -78,7 +78,7 @@ Contracts live under `contracts/` (`split_protocol`, `time_vault`) and `zk/contr
 
 - **[ARCHITECTURE.md](./ARCHITECTURE.md)** — system diagrams, smart contract logic, ZK proof design, database schema, environment variables, module reference.
 - **[BRANDKIT.md](./BRANDKIT.md)** — colors, typography, logo, voice & tone for decks, posts, and any Propulsor-branded material.
-- **[agent/README.md](./agent/README.md)** — full environment variable reference and Blend setup for the autonomous agent.
+- **[agent/README.md](./agent/README.md)** — full environment variable reference for the autonomous agent.
 
 ---
 
@@ -95,7 +95,7 @@ Contracts live under `contracts/` (`split_protocol`, `time_vault`) and `zk/contr
 | ElevenLabs voice | ✅ Complete |
 | Soroban contracts (`SplitProtocol`, `TimeVault`) | ✅ Deployed Testnet |
 | x402 split server + autonomous agent | ✅ Complete |
-| Blend yield integration | ✅ Complete (best-effort) |
+| Blend / DeFindex yield (user-signed, testnet USDC) | ✅ Complete |
 | ZK Proof-of-Vault (Groth16/BLS12-381) | ✅ Live on Testnet |
 | ZK Proof-of-Consistent-Saving (RISC Zero) | ✅ Live on Testnet — on-chain BN254 verifier (see [note](./ARCHITECTURE.md#feature-2--proof-of-consistent-saving)) |
 | SEP-24 fiat on-ramp | 🧪 Client implemented, tested against Stellar's reference anchor — licensed anchor pending (see [note](./ARCHITECTURE.md#known-limitations--future-work)) |

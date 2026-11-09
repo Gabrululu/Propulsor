@@ -20,12 +20,13 @@ export const USDC_ISSUER = "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLL
 // before using this in production.
 export const SEP24_HOME_DOMAIN = "testanchor.stellar.org";
 
-// Contract IDs — Soroban Testnet deployments
-// Fallback to env vars for local override, but default to deployed contract IDs.
-// SplitProtocol has no override: the app and the agent must use the same contract.
-export const SPLIT_CONTRACT_ID = "CAZGYZEJJJ2GQMVEX4MKJ633JNCMGC5WH4P2P6PEXQBMH2VYX5Q2G3BI";
-export const VAULT_CONTRACT_ID =
-  import.meta.env.VITE_VAULT_CONTRACT_ID || "CC73UGT72A2MOZOSK6WFWMMIL32OJPJSPKEBFNBLK2GZJYNORERTSSWX";
+// Contract IDs — Soroban Testnet deployments. Deliberately not read from the
+// environment, so a stale variable can't point the app at another contract than
+// the agent and proof pipeline. contractIds.test.ts keeps every copy in sync.
+export const SPLIT_CONTRACT_ID = "CDGPRA63HQC75LNH6KRUSQPLRZPERTNSBVY3I4UEAKCPHEXHDYEMKEPT";
+export const VAULT_CONTRACT_ID = "CCOJ5A4NDHJ7ANSXVDKG63TSTXGJHWCZGCBDHF5KAGLBGFHVHJKJPMTG";
+export const ZK_VERIFIER_CONTRACT_ID = "CCJK5UO5PGB6S223O2UY6LM6ZDDDQHQ2RQULQ72ICWR76CVJNKUF2KKE";
+export const CONSISTENT_SAVING_VERIFIER_CONTRACT_ID = "CA23PPSGHDQNJ5E2ZDS3HVZ4ZO3VEMTEEKLC5C4DKZK77QOJFW2IHREE";
 export const isSimulationMode = !SPLIT_CONTRACT_ID;
 
 // The agent server's account — the one users authorize to split on their behalf

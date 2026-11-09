@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createCustodialAccountNoPin } from "./custody";
-import { encryptSecretKey } from "./wallet";
+import { decryptSecretKey, encryptSecretKey } from "./wallet";
 import { Keypair } from "@stellar/stellar-sdk";
 const mocks = vi.hoisted(() => ({
   read: vi.fn(),
@@ -9,9 +9,11 @@ const mocks = vi.hoisted(() => ({
   loadAccount: vi.fn(),
   fund: vi.fn(),
   generate: vi.fn(),
+  invoke: vi.fn(),
 }));
 vi.mock("@/integrations/supabase/client", () => ({
   supabase: {
+    functions: { invoke: mocks.invoke },
     from: () => ({
       select: () => ({ eq: () => ({ maybeSingle: mocks.read }) }),
       update: (data: unknown) => {
@@ -31,10 +33,12 @@ vi.mock("./wallet", async (importOriginal) => ({
   generateKeypair: mocks.generate,
 }));
 const userId = "10000000-0000-4000-8000-000000000001";
+const passphrase = "server-derived-passphrase";
 const keypair = Keypair.random();
 beforeEach(() => {
   vi.resetAllMocks();
   mocks.loadAccount.mockResolvedValue({});
+  mocks.invoke.mockResolvedValue({ data: { passphrase }, error: null });
 });
 describe("restoring existing custodial accounts", () => {
   it("preserves PIN-protected accounts instead of treating them as social accounts", async () => {
@@ -54,7 +58,7 @@ describe("restoring existing custodial accounts", () => {
     expect(mocks.fund).not.toHaveBeenCalled();
   });
   it("reactivates the same social account after a testnet reset", async () => {
-    const encrypted = await encryptSecretKey(keypair.secret(), userId);
+    const encrypted = await encryptSecretKey(keypair.secret(), passphrase);
     mocks.read.mockResolvedValue({
       data: {
         stellar_public_key: keypair.publicKey(),
@@ -71,6 +75,30 @@ describe("restoring existing custodial accounts", () => {
     expect(mocks.fund).toHaveBeenCalledWith(keypair.publicKey());
     expect(mocks.generate).not.toHaveBeenCalled();
     expect(mocks.update).toHaveBeenCalledWith({ stellar_funded: true });
+  });
+  it("re-encrypts an account that still uses its user id as passphrase", async () => {
+    const encrypted = await encryptSecretKey(keypair.secret(), userId);
+    mocks.read.mockResolvedValue({
+      data: {
+        stellar_public_key: keypair.publicKey(),
+        stellar_secret_encrypted: encrypted,
+      },
+    });
+    await expect(createCustodialAccountNoPin(userId)).resolves.toMatchObject({
+      mode: "custodial_social",
+    });
+    const saved = mocks.update.mock.calls[0][0].stellar_secret_encrypted;
+    await expect(decryptSecretKey(saved, passphrase)).resolves.toBe(keypair.secret());
+    await expect(decryptSecretKey(saved, userId)).rejects.toThrow();
+  });
+  it("creates nothing if the server-side passphrase is unavailable", async () => {
+    mocks.read.mockResolvedValue({ data: null, error: null });
+    mocks.invoke.mockResolvedValue({ data: null, error: new Error("503") });
+    await expect(createCustodialAccountNoPin(userId)).rejects.toThrow(
+      "WALLET_KEY_UNAVAILABLE",
+    );
+    expect(mocks.generate).not.toHaveBeenCalled();
+    expect(mocks.fund).not.toHaveBeenCalled();
   });
   it("stops restoration if reactivation fails", async () => {
     mocks.read.mockResolvedValue({

@@ -2,9 +2,8 @@
  * monitor.ts — Autonomous agent for Propulsor
  *
  * Watches Stellar Testnet for incoming USDC payments to *any* Propulsor
- * user's account, and when one arrives, autonomously calls the
- * x402-protected /execute-split endpoint — paying the 0.01 USDC fee itself
- * — and logs the on-chain vault breakdown.
+ * user's account, and when one arrives, asks the agent server to split it for
+ * users who authorized the agent, and logs the on-chain vault breakdown.
  *
  * This is a single process that serves every user: it opens one global
  * Horizon payment stream (not scoped to one account) and filters incoming
@@ -13,7 +12,7 @@
  * a newly onboarded user is picked up automatically without redeploying.
  *
  * Usage:
- *   AGENT_SECRET=S... SUPABASE_URL=... AGENT_WEBHOOK_SECRET=... pnpm run monitor
+ *   INTERNAL_API_KEY=... AGENT_SERVER_URL=... SUPABASE_URL=... AGENT_WEBHOOK_SECRET=... pnpm run monitor
  */
 
 import { EventSource } from 'eventsource';
@@ -21,15 +20,8 @@ import { EventSource } from 'eventsource';
 (global as unknown as Record<string, unknown>).EventSource = EventSource;
 
 import 'dotenv/config';
-import { Account, Address, BASE_FEE, Contract, Horizon, Keypair, Networks, TransactionBuilder, rpc, scValToNative } from '@stellar/stellar-sdk';
-import { ExactStellarScheme } from '@x402/stellar/exact/client';
-import { createEd25519Signer } from '@x402/stellar';
-import {
-  decodePaymentRequiredHeader,
-  encodePaymentSignatureHeader,
-} from '@x402/core/http';
+import { Account, Address, BASE_FEE, Contract, Horizon, Networks, TransactionBuilder, rpc, scValToNative } from '@stellar/stellar-sdk';
 import { SPLIT_CONTRACT_ID } from './config.js';
-import { depositToBlend } from './blend.js';
 import { notifyAgentWebhook } from './supabase.js';
 
 // ---------------------------------------------------------------------------
@@ -45,17 +37,12 @@ const CONTRACT_ID = SPLIT_CONTRACT_ID;
 const RECONNECT_DELAY_MS = 5_000;
 const WATCHLIST_REFRESH_MS = 60_000;
 
-const AGENT_SECRET = process.env.AGENT_SECRET ?? process.env.SERVER_STELLAR_SECRET ?? '';
+const INTERNAL_API_KEY = process.env.INTERNAL_API_KEY ?? '';
 const SUPABASE_URL = process.env.SUPABASE_URL ?? '';
 const AGENT_WEBHOOK_SECRET = process.env.AGENT_WEBHOOK_SECRET ?? '';
 
-// vault_2 (savings) Blend integration — optional.
-// If set, vault_2's USDC allocation is deposited into Blend after every split.
-const VAULT2_PUBLIC_KEY = process.env.VAULT2_PUBLIC_KEY ?? '';
-const VAULT2_SECRET = process.env.VAULT2_SECRET ?? '';
-
-if (!AGENT_SECRET) {
-  console.error('[monitor] ERROR: AGENT_SECRET (or SERVER_STELLAR_SECRET) env variable is required.');
+if (!INTERNAL_API_KEY) {
+  console.error('[monitor] ERROR: INTERNAL_API_KEY is required, the same value as the agent server.');
   process.exit(1);
 }
 if (!SUPABASE_URL || !AGENT_WEBHOOK_SECRET) {
@@ -66,9 +53,6 @@ if (!SUPABASE_URL || !AGENT_WEBHOOK_SECRET) {
   );
   process.exit(1);
 }
-
-const agentKeypair = Keypair.fromSecret(AGENT_SECRET);
-const agentAddress = agentKeypair.publicKey();
 
 // ---------------------------------------------------------------------------
 // Logging helpers
@@ -128,8 +112,8 @@ async function refreshWatchlist(): Promise<void> {
 }
 
 // ---------------------------------------------------------------------------
-// Authorization check — avoids paying the x402 fee for a split the contract
-// would refuse because this user never authorized the agent server.
+// Authorization check — most users on the watchlist may not have authorized the
+// agent, and those aren't errors worth reporting to their dashboard.
 // ---------------------------------------------------------------------------
 
 async function isServerAuthorizedBy(user: string): Promise<boolean> {
@@ -152,79 +136,23 @@ async function isServerAuthorizedBy(user: string): Promise<boolean> {
 }
 
 // ---------------------------------------------------------------------------
-// x402 payment flow
-//
-// 1. POST /execute-split  → 402 + PAYMENT-REQUIRED header
-// 2. Decode requirements, build & sign Stellar payment transaction
-// 3. POST /execute-split again with X-PAYMENT header
-// 4. Return { txHash, vaultBreakdown }
+// Ask the agent server to split a payment. It re-checks the payment on the
+// network, so this can't be used to record money that never arrived.
 // ---------------------------------------------------------------------------
 
-async function callExecuteSplitWithPayment(
+async function requestSplit(
   userPublicKey: string,
   paymentId: string,
 ): Promise<{ txHash: string; vaultBreakdown: Array<{ vaultId: number; balance: string }> }> {
-  const url = `${AGENT_SERVER_URL}/execute-split`;
-  const body = JSON.stringify({ userPublicKey, paymentId });
-  const headers = { 'Content-Type': 'application/json' };
-
-  // ── Step 1: Initial request (expect 402) ──────────────────────────────────
-  log(`[x402] → POST ${url}`);
-  const firstResponse = await fetch(url, { method: 'POST', headers, body });
-
-  if (firstResponse.ok) {
-    // Payment was somehow already satisfied (e.g. dev mode)
-    return firstResponse.json() as Promise<{ txHash: string; vaultBreakdown: Array<{ vaultId: number; balance: string }> }>;
-  }
-
-  if (firstResponse.status !== 402) {
-    const text = await firstResponse.text();
-    throw new Error(`Unexpected status ${firstResponse.status}: ${text}`);
-  }
-
-  // ── Step 2: Decode payment requirements ───────────────────────────────────
-  const paymentRequiredHeader = firstResponse.headers.get('payment-required');
-  if (!paymentRequiredHeader) {
-    throw new Error('Server returned 402 but no PAYMENT-REQUIRED header found');
-  }
-
-  const paymentRequired = decodePaymentRequiredHeader(paymentRequiredHeader);
-  const { x402Version, accepts } = paymentRequired;
-
-  // Pick the first Stellar "exact" requirement
-  const requirement = accepts.find(
-    (a: { scheme: string; network: string }) =>
-      a.scheme === 'exact' && a.network.startsWith('stellar'),
-  );
-  if (!requirement) {
-    throw new Error(`No compatible payment requirement found. Got: ${JSON.stringify(accepts)}`);
-  }
-
-  log(`[x402] ← 402  amount=${requirement.amount}  asset=USDC  payTo=${requirement.payTo}`);
-
-  // ── Step 3: Build and sign the payment payload ────────────────────────────
-  const signer = createEd25519Signer(AGENT_SECRET, requirement.network);
-  const scheme = new ExactStellarScheme(signer);
-
-  log(`[x402] Signing payment with agent keypair ${agentAddress.slice(0, 8)}...`);
-  const paymentPayload = await scheme.createPaymentPayload(x402Version, requirement);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const encodedPayment = encodePaymentSignatureHeader(paymentPayload as any);
-
-  // ── Step 4: Retry with payment header ─────────────────────────────────────
-  log('[x402] → Retrying with X-PAYMENT header...');
-  const paidResponse = await fetch(url, {
+  const response = await fetch(`${AGENT_SERVER_URL}/split`, {
     method: 'POST',
-    headers: { ...headers, 'X-PAYMENT': encodedPayment },
-    body,
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${INTERNAL_API_KEY}` },
+    body: JSON.stringify({ userPublicKey, paymentId }),
   });
-
-  if (!paidResponse.ok) {
-    const text = await paidResponse.text();
-    throw new Error(`Paid request failed (${paidResponse.status}): ${text}`);
+  if (!response.ok) {
+    throw new Error(`Agent server returned ${response.status}: ${await response.text()}`);
   }
-
-  return paidResponse.json() as Promise<{ txHash: string; vaultBreakdown: Array<{ vaultId: number; balance: string }> }>;
+  return response.json() as Promise<{ txHash: string; vaultBreakdown: Array<{ vaultId: number; balance: string }> }>;
 }
 
 // ---------------------------------------------------------------------------
@@ -285,8 +213,8 @@ function startStream(): () => void {
             return;
           }
 
-          logSection('x402 PAYMENT FLOW — calling /execute-split');
-          const result = await callExecuteSplitWithPayment(p.to, p.id);
+          logSection('Requesting split from the agent server');
+          const result = await requestSplit(p.to, p.id);
 
           logSection('SPLIT EXECUTED SUCCESSFULLY');
           log(`  Contract txHash:  ${result.txHash}`);
@@ -310,39 +238,8 @@ function startStream(): () => void {
 
           log('');
 
-          // ── Blend deposit: vault_2 (savings) earns yield ─────────────────
-          if (VAULT2_SECRET && VAULT2_PUBLIC_KEY) {
-            const vault2 = result.vaultBreakdown.find((v) => v.vaultId === 2);
-            const vault2Stroops = vault2 ? Number(vault2.balance) : 0;
-
-            if (vault2Stroops > 0) {
-              logSection('BLEND DEPOSIT — vault_2 savings');
-              const vault2Usdc = (vault2Stroops / 10_000_000).toFixed(7);
-              log(`  Depositing ${vault2Usdc} USDC from vault_2 into Blend lending pool...`);
-              try {
-                const blendResult = await depositToBlend({
-                  userPublicKey: VAULT2_PUBLIC_KEY,
-                  userSecret: VAULT2_SECRET,
-                  amount: vault2Stroops,
-                });
-                log(`  💰 vault_2: ${vault2Usdc} USDC deposited to Blend → earning yield`);
-                log(`  Blend txHash:       ${blendResult.txHash}`);
-                log(`  bTokens received:   ${blendResult.blendTokensReceived}`);
-
-                await notifyAgentWebhook({
-                  watchedAccount: p.to,
-                  eventType: 'blend_deposited',
-                  amountUsdc: vault2Stroops / 10_000_000,
-                  blendTxHash: blendResult.txHash,
-                  blendSuccess: true,
-                });
-              } catch (blendErr) {
-                log('  ⚠️  Blend unavailable, vault_2 held in Stellar account');
-                log(`  (${blendErr instanceof Error ? blendErr.message : String(blendErr)})`);
-              }
-              log('');
-            }
-          }
+          // Yield is the user's choice: they deposit from their own account in the
+          // app (src/components/YieldPanel.tsx). The agent never moves those funds.
         } catch (err) {
           const message = err instanceof Error ? err.message : String(err);
           logSection('SPLIT FAILED');
@@ -375,11 +272,9 @@ function startStream(): () => void {
 
 async function main() {
   logSection('PROPULSOR AUTONOMOUS AGENT — STARTING');
-  log(`  Agent address:     ${agentAddress}`);
-  log(`  x402 server:       ${AGENT_SERVER_URL}`);
+  log(`  Agent server:      ${AGENT_SERVER_URL}`);
   log(`  USDC issuer:       ${USDC_ISSUER.slice(0, 8)}...`);
   log(`  Network:           Stellar Testnet`);
-  log(`  Blend deposit:     ${VAULT2_SECRET && VAULT2_PUBLIC_KEY ? `enabled (vault_2 = ${VAULT2_PUBLIC_KEY.slice(0, 8)}...)` : 'disabled (set VAULT2_PUBLIC_KEY + VAULT2_SECRET to enable)'}`);
   log('');
 
   await refreshWatchlist();

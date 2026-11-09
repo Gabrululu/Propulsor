@@ -94,8 +94,19 @@ export async function loadEncryptedSecret(
   return data.stellar_secret_encrypted ?? null;
 }
 
+// ── Social accounts' passphrase ─────────────────────────────
+// Derived server-side from a secret (see wallet-key Edge Function), so a copy of
+// the database isn't enough to decrypt keys.
+
+export async function getSocialPassphrase(): Promise<string> {
+  const { data, error } = await supabase.functions.invoke("wallet-key");
+  if (error || typeof data?.passphrase !== "string") {
+    throw new Error("WALLET_KEY_UNAVAILABLE");
+  }
+  return data.passphrase;
+}
+
 // ── Create custodial account without PIN (social auth) ──────
-// Uses userId as the encryption seed — no PIN required.
 // Idempotent: returns existing keys if account already exists.
 
 export async function createCustodialAccountNoPin(
@@ -118,24 +129,38 @@ export async function createCustodialAccountNoPin(
     } catch {
       funded = await fundTestnetAccount(existing.stellar_public_key);
     }
+    const passphrase = await getSocialPassphrase();
+    // Accounts created before the server-side secret used userId as passphrase
+    const reencrypted = (await verifyPin(existing.stellar_secret_encrypted, userId))
+      ? await encryptSecretKey(
+          await decryptSecretKey(existing.stellar_secret_encrypted, userId),
+          passphrase,
+        )
+      : null;
     const { error } = await supabase
       .from("users_profile")
-      .update({ stellar_funded: funded })
+      .update({
+        stellar_funded: funded,
+        ...(reencrypted && { stellar_secret_encrypted: reencrypted }),
+      })
       .eq("id", userId);
     if (error) throw new Error("PROFILE_SAVE_FAILED");
     return {
       publicKey: existing.stellar_public_key,
       funded,
-      mode: (await verifyPin(existing.stellar_secret_encrypted, userId))
-        ? "custodial_social"
-        : "custodial",
+      mode:
+        reencrypted ||
+        (await verifyPin(existing.stellar_secret_encrypted, passphrase))
+          ? "custodial_social"
+          : "custodial",
     };
   }
 
-  // Generate new keypair and encrypt using userId as passphrase
+  // Before creating anything, so a missing server secret can't strand an account
+  const passphrase = await getSocialPassphrase();
   const { publicKey, secretKey } = generateKeypair();
   const funded = await fundTestnetAccount(publicKey);
-  const encrypted = await encryptSecretKey(secretKey, userId);
+  const encrypted = await encryptSecretKey(secretKey, passphrase);
 
   const { error } = await supabase.from("users_profile").upsert(
     {

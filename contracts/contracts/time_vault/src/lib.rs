@@ -1,8 +1,9 @@
 #![no_std]
 
 use soroban_sdk::{
-    contract, contractimpl, contracttype, contracterror, panic_with_error,
-    Address, Env, Symbol,
+    ContractExecutable,
+    contract, contractevent, contractimpl, contracttype, contracterror, panic_with_error, symbol_short,
+    Address, BytesN, Env, Symbol,
 };
 
 // ---------------------------------------------------------------------------
@@ -31,6 +32,8 @@ pub struct VaultLock {
 // Errors
 // ---------------------------------------------------------------------------
 
+const ADMIN_KEY: Symbol = symbol_short!("admin");
+
 #[contracterror]
 #[derive(Copy, Clone, PartialEq, Eq)]
 pub enum VaultError {
@@ -46,11 +49,57 @@ pub enum VaultError {
 // Contract
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// Events. Same topics and data as the earlier env.events().publish calls, so
+// anything reading them sees no change.
+// ---------------------------------------------------------------------------
+
+#[contractevent(topics = ["locked"], data_format = "single-value")]
+pub struct Locked {
+    #[topic]
+    pub user: Address,
+    #[topic]
+    pub vault_id: u32,
+    pub amount: i128,
+}
+
+#[contractevent(topics = ["released"], data_format = "single-value")]
+pub struct Released {
+    #[topic]
+    pub user: Address,
+    #[topic]
+    pub vault_id: u32,
+    pub amount: i128,
+}
+
+/// `amount` is what was added, not the new total.
+#[contractevent(topics = ["added"], data_format = "single-value")]
+pub struct Added {
+    #[topic]
+    pub user: Address,
+    #[topic]
+    pub vault_id: u32,
+    pub amount: i128,
+}
+
 #[contract]
 pub struct TimeVault;
 
 #[contractimpl]
 impl TimeVault {
+    /// `admin` may upgrade the contract's code and nothing else.
+    pub fn __constructor(env: Env, admin: Address) {
+        env.storage().instance().set(&ADMIN_KEY, &admin);
+        env.storage().instance().extend_ttl(LEDGER_THRESHOLD, LEDGER_EXTEND_TO);
+    }
+
+    /// Replace this contract's code, keeping its address and data.
+    pub fn upgrade(env: Env, new_wasm_hash: BytesN<32>) {
+        let admin: Address = env.storage().instance().get(&ADMIN_KEY).unwrap();
+        admin.require_auth();
+        env.deployer().update_current_contract(ContractExecutable::Wasm(new_wasm_hash));
+    }
+
     /// Lock funds in a vault under a time condition, a goal condition, or both.
     ///
     /// Constraints enforced:
@@ -114,10 +163,7 @@ impl TimeVault {
             .persistent()
             .extend_ttl(&key, LEDGER_THRESHOLD, LEDGER_EXTEND_TO);
 
-        env.events().publish(
-            (Symbol::new(&env, "locked"), user, vault_id),
-            amount,
-        );
+        Locked { user, vault_id, amount }.publish(&env);
     }
 
     /// Returns true when the vault is free to release.
@@ -176,10 +222,7 @@ impl TimeVault {
         // Remove before emitting the event — checks-effects-interactions order.
         env.storage().persistent().remove(&key);
 
-        env.events().publish(
-            (Symbol::new(&env, "released"), user, vault_id),
-            amount,
-        );
+        Released { user, vault_id, amount }.publish(&env);
 
         amount
     }
@@ -209,10 +252,7 @@ impl TimeVault {
             .persistent()
             .extend_ttl(&key, LEDGER_THRESHOLD, LEDGER_EXTEND_TO);
 
-        env.events().publish(
-            (Symbol::new(&env, "added"), user, vault_id),
-            amount,
-        );
+        Added { user, vault_id, amount }.publish(&env);
     }
 
     /// Return the lock for a vault, or None if there is no active lock.

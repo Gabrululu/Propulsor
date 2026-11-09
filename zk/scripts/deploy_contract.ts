@@ -4,10 +4,11 @@
  * Uploads WASM then deploys atomically with constructor args (admin + VK).
  *
  * Usage:
- *   pnpm exec tsx scripts/deploy_contract.ts --secret S...
+ *   pnpm exec tsx scripts/deploy_contract.ts --secret S... --split C...
  *
  * Environment variables:
- *   STELLAR_SECRET — deployer account
+ *   STELLAR_SECRET    — deployer account
+ *   SPLIT_CONTRACT_ID — SplitProtocol deployment proofs are checked against
  */
 
 import {
@@ -21,6 +22,7 @@ import {
   Operation,
   hash,
 } from "@stellar/stellar-sdk";
+import { randomBytes } from "crypto";
 import { readFileSync } from "fs";
 import { join, dirname } from "path";
 import { fileURLToPath } from "url";
@@ -32,13 +34,16 @@ const PASSPHRASE = Networks.TESTNET;
 function getConfig() {
   const args = process.argv.slice(2);
   let secret = process.env.STELLAR_SECRET ?? "";
+  let split = process.env.SPLIT_CONTRACT_ID ?? "";
   let wasmPath = join(__dirname, "../contracts/proof_of_vault_verifier/target/wasm32v1-none/release/proof_of_vault_verifier.wasm");
   for (let i = 0; i < args.length; i++) {
     if (args[i] === "--secret" && args[i + 1]) secret = args[++i];
     if (args[i] === "--wasm"   && args[i + 1]) wasmPath = args[++i];
+    if (args[i] === "--split"  && args[i + 1]) split = args[++i];
   }
   if (!secret) { console.error("Missing --secret or STELLAR_SECRET"); process.exit(1); }
-  return { secret, wasmPath };
+  if (!split)  { console.error("Missing --split or SPLIT_CONTRACT_ID"); process.exit(1); }
+  return { secret, wasmPath, split };
 }
 
 function hexToScBytesN(hex: string): xdr.ScVal {
@@ -75,7 +80,7 @@ async function submitTx(
 }
 
 async function main() {
-  const { secret, wasmPath } = getConfig();
+  const { secret, wasmPath, split } = getConfig();
   const keypair = Keypair.fromSecret(secret);
   const soroban = new SorobanRpc.Server(RPC_URL, { allowHttp: false });
 
@@ -107,6 +112,7 @@ async function main() {
     new xdr.ScMapEntry({ key: xdr.ScVal.scvSymbol("gamma"), val: hexToScBytesN(vk.gamma) }),
     new xdr.ScMapEntry({ key: xdr.ScVal.scvSymbol("ic_0"),  val: hexToScBytesN(vk.ic_0)  }),
     new xdr.ScMapEntry({ key: xdr.ScVal.scvSymbol("ic_1"),  val: hexToScBytesN(vk.ic_1)  }),
+    new xdr.ScMapEntry({ key: xdr.ScVal.scvSymbol("ic_2"),  val: hexToScBytesN(vk.ic_2)  }),
   ]);
 
   // Step 3: Deploy with Protocol 22 createContractV2 (constructor args included)
@@ -115,11 +121,11 @@ async function main() {
     contractIdPreimage: xdr.ContractIdPreimage.contractIdPreimageFromAddress(
       new xdr.ContractIdPreimageFromAddress({
         address: new Address(keypair.publicKey()).toScAddress(),
-        salt: Buffer.alloc(32),
+        salt: randomBytes(32),
       })
     ),
     executable: xdr.ContractExecutable.contractExecutableWasm(wasmHash),
-    constructorArgs: [adminScVal, vkScVal],
+    constructorArgs: [adminScVal, vkScVal, new Address(split).toScVal()],
   });
 
   const hostFn = xdr.HostFunction.hostFunctionTypeCreateContractV2(createArgs);

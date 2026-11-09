@@ -27,9 +27,11 @@
 extern crate alloc;
 
 use soroban_sdk::{
-    contract, contractimpl, contracttype, contracterror, panic_with_error,
+    ContractExecutable,
+    contract, contractevent, contractimpl, contracttype, contracterror, panic_with_error,
     crypto::bn254::{Bn254Fr, Bn254G1Affine, Bn254G2Affine},
-    Address, Bytes, BytesN, Env, Symbol, Vec,
+    xdr::ToXdr,
+    vec, Address, Bytes, BytesN, Env, IntoVal, Symbol, Val, Vec,
 };
 
 // ---------------------------------------------------------------------------
@@ -38,6 +40,14 @@ use soroban_sdk::{
 
 const LEDGER_THRESHOLD: u32 = 518_400;    // 30 days
 const LEDGER_EXTEND_TO: u32 = 3_110_400;  // 180 days
+
+// Journal layout, written by the guest (all integers big-endian):
+//   months_with_saving u32 | threshold_months u32 | min_amount u64 | as_of u64
+//   | user_hash [32] | history_hash [32]
+const JOURNAL_LEN: u32 = 88;
+// A proof must be submitted within a day of the moment it counted months from.
+const MAX_PROOF_AGE_SECS: u64 = 86_400;
+const MIN_AMOUNT_STROOPS: u64 = 10_000_000; // $1 USDC
 
 // SPEC.md §3a: fixed public-input scalars, same for every proof from this
 // risc0-zkvm version (only (c0, c1), derived per-call from the journal, vary
@@ -104,11 +114,30 @@ pub struct ProofRecord {
     pub ledger: u32,
 }
 
+/// Mirrors SplitProtocol's SplitRecord.
+#[contracttype]
+#[derive(Clone)]
+pub struct SplitRecord {
+    pub timestamp: u64,
+    pub income: i128,
+}
+
+struct Journal {
+    months_with_saving: u32,
+    threshold_months: u32,
+    min_amount: u64,
+    as_of: u64,
+    user_hash: BytesN<32>,
+    history_hash: BytesN<32>,
+}
+
 #[contracttype]
 pub enum DataKey {
     Vk,
     Admin,
     ImageId,
+    SplitContract,
+    MinMonths,
     Nullifier(BytesN<32>), // sha256(seal) -> ProofRecord
 }
 
@@ -123,11 +152,28 @@ pub enum VerifierError {
     InvalidProof = 3,
     ReplayAttack = 4,
     InvalidJournal = 5,
+    NotQualified = 6,
+    WrongUser = 7,
+    StaleProof = 8,
+    HistoryMismatch = 9,
 }
 
 // ---------------------------------------------------------------------------
 // Contract
 // ---------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
+// Events. Same topics and data as the earlier env.events().publish calls, so
+// anything reading them sees no change.
+// ---------------------------------------------------------------------------
+
+#[contractevent(topics = ["ConsistentSavingVerified"], data_format = "vec")]
+pub struct ConsistentSavingVerified {
+    pub user: Address,
+    pub months_with_saving: u32,
+    pub threshold_months: u32,
+    pub nullifier: BytesN<32>,
+}
 
 #[contract]
 pub struct ConsistentSavingVerifier;
@@ -139,11 +185,29 @@ impl ConsistentSavingVerifier {
 
     /// Called once at deploy time. `image_id` is the guest ELF's image ID
     /// (methods::CONSISTENT_SAVING_ID from the RISC Zero build — SPEC.md §3d).
-    pub fn __constructor(env: Env, admin: Address, vk: VerificationKey, image_id: BytesN<32>) {
+    /// `split_contract` is the SplitProtocol deployment proofs are checked against,
+    /// and `min_months` the lowest threshold_months this deployment accepts.
+    pub fn __constructor(
+        env: Env,
+        admin: Address,
+        vk: VerificationKey,
+        image_id: BytesN<32>,
+        split_contract: Address,
+        min_months: u32,
+    ) {
+        env.storage().instance().set(&DataKey::SplitContract, &split_contract);
+        env.storage().instance().set(&DataKey::MinMonths, &min_months);
         env.storage().instance().set(&DataKey::Admin, &admin);
         env.storage().instance().set(&DataKey::Vk, &vk);
         env.storage().instance().set(&DataKey::ImageId, &image_id);
         env.storage().instance().extend_ttl(LEDGER_THRESHOLD, LEDGER_EXTEND_TO);
+    }
+
+    /// Replace this contract's code, keeping its address and data.
+    pub fn upgrade(env: Env, new_wasm_hash: BytesN<32>) {
+        let admin: Address = env.storage().instance().get(&DataKey::Admin).unwrap();
+        admin.require_auth();
+        env.deployer().update_current_contract(ContractExecutable::Wasm(new_wasm_hash));
     }
 
     // ── Core verification ──────────────────────────────────────────────────
@@ -152,7 +216,9 @@ impl ConsistentSavingVerifier {
     /// store the result on-chain.
     ///
     /// Parameters:
-    ///   user    — the account making the claim (must sign)
+    ///   user    — the account the proof is about. It doesn't have to sign: the
+    ///             journal commits to this account and to its on-chain history,
+    ///             so whoever submits can't change what the proof says.
     ///   proof   — the Groth16 seal (a, b, c), sliced directly from
     ///             Groth16Receipt.seal — see SPEC.md §4
     ///   journal — the guest's public output bytes (Journal struct, risc0-serde
@@ -165,7 +231,8 @@ impl ConsistentSavingVerifier {
         proof: Groth16Proof,
         journal: Bytes,
     ) -> BytesN<32> {
-        user.require_auth();
+        let claimed = Self::parse_journal(&env, &journal);
+        Self::check_statement(&env, &user, &claimed);
 
         let vk: VerificationKey = env.storage().instance()
             .get(&DataKey::Vk)
@@ -238,8 +305,7 @@ impl ConsistentSavingVerifier {
             panic_with_error!(&env, VerifierError::InvalidProof);
         }
 
-        // ── Parse journal for the ProofRecord (SPEC.md note above) ─────────
-        let (months_with_saving, threshold_months) = Self::parse_journal(&env, &journal);
+        let Journal { months_with_saving, threshold_months, .. } = claimed;
 
         let record = ProofRecord {
             user: user.clone(),
@@ -255,10 +321,13 @@ impl ConsistentSavingVerifier {
             LEDGER_EXTEND_TO,
         );
 
-        env.events().publish(
-            (Symbol::new(&env, "ConsistentSavingVerified"),),
-            (user, months_with_saving, threshold_months, nullifier.clone()),
-        );
+        ConsistentSavingVerified {
+            user,
+            months_with_saving,
+            threshold_months,
+            nullifier: nullifier.clone(),
+        }
+        .publish(&env);
 
         nullifier
     }
@@ -376,28 +445,69 @@ impl ConsistentSavingVerifier {
         out
     }
 
-    /// Parse the guest's journal (risc0-serde-encoded Journal struct) to
-    /// extract months_with_saving / threshold_months for the ProofRecord.
-    ///
-    /// Confirmed 2026-08-21 against a real fixture (fixture.json's
-    /// journal_hex, from crosscheck_fixture.rs's synthetic 7/12-months input):
-    /// risc0-serde encodes each field word-aligned, so the two leading u32
-    /// fields land at flat little-endian offsets 0..4 and 4..8 with no
-    /// padding between them — decoding matched the guest's real input
-    /// (7, 6) exactly. Per SPEC.md §5b this parsing is display-only and not
-    /// security-critical: the pairing check in verify_proof authenticates
-    /// the *raw* journal bytes via journal_digest = sha256(journal)
-    /// regardless of how this function interprets them.
-    fn parse_journal(env: &Env, journal: &Bytes) -> (u32, u32) {
-        if journal.len() < 8 {
+    /// The pairing check authenticates the journal's bytes (SPEC.md §3d); this
+    /// checks that what those bytes say is about this user and their real data.
+    fn check_statement(env: &Env, user: &Address, journal: &Journal) {
+        let user_hash: BytesN<32> = env.crypto().sha256(&user.clone().to_xdr(env)).into();
+        if journal.user_hash != user_hash {
+            panic_with_error!(env, VerifierError::WrongUser);
+        }
+
+        let min_months: u32 = env.storage().instance().get(&DataKey::MinMonths).unwrap();
+        if journal.threshold_months < min_months
+            || journal.months_with_saving < journal.threshold_months
+            || journal.min_amount < MIN_AMOUNT_STROOPS
+        {
+            panic_with_error!(env, VerifierError::NotQualified);
+        }
+
+        let now = env.ledger().timestamp();
+        if journal.as_of > now || now - journal.as_of > MAX_PROOF_AGE_SECS {
+            panic_with_error!(env, VerifierError::StaleProof);
+        }
+
+        if journal.history_hash != Self::history_hash(env, user) {
+            panic_with_error!(env, VerifierError::HistoryMismatch);
+        }
+    }
+
+    /// sha256 of the user's history, as the guest hashes it: each record is
+    /// timestamp (8 bytes) || income (16 bytes), big-endian.
+    fn history_hash(env: &Env, user: &Address) -> BytesN<32> {
+        let split: Address = env.storage().instance().get(&DataKey::SplitContract).unwrap();
+        let args: Vec<Val> = vec![env, user.into_val(env)];
+        let history: Vec<SplitRecord> =
+            env.invoke_contract(&split, &Symbol::new(env, "get_split_history"), args);
+
+        let mut bytes = Bytes::new(env);
+        for record in history.iter() {
+            bytes.extend_from_array(&record.timestamp.to_be_bytes());
+            bytes.extend_from_array(&record.income.to_be_bytes());
+        }
+        env.crypto().sha256(&bytes).into()
+    }
+
+    fn parse_journal(env: &Env, journal: &Bytes) -> Journal {
+        if journal.len() != JOURNAL_LEN {
             panic_with_error!(env, VerifierError::InvalidJournal);
         }
-        let mut buf = [0u8; 4];
-        journal.slice(0..4).copy_into_slice(&mut buf);
-        let months_with_saving = u32::from_le_bytes(buf);
-        journal.slice(4..8).copy_into_slice(&mut buf);
-        let threshold_months = u32::from_le_bytes(buf);
-        (months_with_saving, threshold_months)
+        let mut raw = [0u8; JOURNAL_LEN as usize];
+        journal.copy_into_slice(&mut raw);
+
+        let u32_at = |i: usize| u32::from_be_bytes(raw[i..i + 4].try_into().unwrap());
+        let u64_at = |i: usize| u64::from_be_bytes(raw[i..i + 8].try_into().unwrap());
+        let hash_at = |i: usize| {
+            let bytes: [u8; 32] = raw[i..i + 32].try_into().unwrap();
+            BytesN::from_array(env, &bytes)
+        };
+        Journal {
+            months_with_saving: u32_at(0),
+            threshold_months: u32_at(4),
+            min_amount: u64_at(8),
+            as_of: u64_at(16),
+            user_hash: hash_at(24),
+            history_hash: hash_at(56),
+        }
     }
 }
 

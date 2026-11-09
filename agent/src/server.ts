@@ -108,25 +108,6 @@ app.use(
 );
 
 // ---------------------------------------------------------------------------
-// Helper: poll until Soroban transaction is confirmed
-// ---------------------------------------------------------------------------
-
-async function waitForTransaction(
-  hash: string,
-  attempts = 20,
-  delayMs = 1500,
-): Promise<SorobanRpc.Api.GetTransactionResponse> {
-  for (let i = 0; i < attempts; i++) {
-    const tx = await soroban.getTransaction(hash);
-    if (tx.status !== SorobanRpc.Api.GetTransactionStatus.NOT_FOUND) {
-      return tx;
-    }
-    await new Promise(r => setTimeout(r, delayMs));
-  }
-  throw new Error(`Transaction ${hash} timed out after ${(attempts * delayMs) / 1000}s`);
-}
-
-// ---------------------------------------------------------------------------
 // Core split logic — shared by /execute-split (x402) and /split (bearer)
 // ---------------------------------------------------------------------------
 
@@ -161,15 +142,20 @@ async function runSplit(userPublicKey: string, incomeAmount: number, paymentRef:
   const preparedTx = SorobanRpc.assembleTransaction(tx, sim).build();
   preparedTx.sign(serverKeypair);
 
-  const sendResult = await soroban.sendTransaction(preparedTx);
+  // TRY_AGAIN_LATER means "not queued": usually this account has a transaction in flight
+  let sendResult = await soroban.sendTransaction(preparedTx);
+  for (let i = 0; sendResult.status === 'TRY_AGAIN_LATER' && i < 5; i++) {
+    await new Promise(r => setTimeout(r, 2000));
+    sendResult = await soroban.sendTransaction(preparedTx);
+  }
 
-  if (sendResult.status === 'ERROR') {
+  if (sendResult.status === 'ERROR' || sendResult.status === 'TRY_AGAIN_LATER') {
     throw new Error(
-      `Transaction rejected by network: ${JSON.stringify(sendResult.errorResult ?? sendResult)}`,
+      `Transaction rejected by network: ${sendResult.status} ${JSON.stringify(sendResult.errorResult ?? '')}`,
     );
   }
 
-  const confirmed = await waitForTransaction(sendResult.hash);
+  const confirmed = await soroban.pollTransaction(sendResult.hash, { attempts: 30 });
 
   if (confirmed.status !== SorobanRpc.Api.GetTransactionStatus.SUCCESS) {
     throw new Error(`Transaction failed (status: ${confirmed.status})`);
@@ -256,22 +242,34 @@ app.post('/split', async (req: Request, res: Response) => {
     return;
   }
 
-  const { userPublicKey, incomeAmount } = req.body as {
+  // Two trusted callers: the monitor sends the payment it detected, and
+  // agent-proxy sends an amount requested by the authenticated user themselves.
+  const { userPublicKey, paymentId, incomeAmount: requestedAmount } = req.body as {
     userPublicKey?: string;
+    paymentId?: string;
     incomeAmount?: number;
   };
 
-  if (!userPublicKey || typeof incomeAmount !== 'number' || incomeAmount <= 0) {
+  if (!userPublicKey || (!paymentId && !(typeof requestedAmount === 'number' && requestedAmount > 0))) {
     res.status(400).json({
       success: false,
-      error: 'Request body must include userPublicKey (string) and incomeAmount (number > 0)',
+      error: 'Request body must include userPublicKey (string) and paymentId (string) or incomeAmount (number > 0)',
     });
     return;
   }
 
   try {
-    // Requested by the authenticated user themselves, through agent-proxy
-    const { txHash, vaultBreakdown } = await runSplit(userPublicKey, incomeAmount, randomBytes(32));
+    const incomeAmount = paymentId
+      ? await verifyIncomingPayment(paymentId, userPublicKey)
+      : requestedAmount!;
+    if (incomeAmount === null) {
+      res.status(422).json({ success: false, error: 'No matching USDC payment to this user' });
+      return;
+    }
+    const paymentRef = paymentId
+      ? createHash('sha256').update(`payment:${paymentId}`).digest()
+      : randomBytes(32);
+    const { txHash, vaultBreakdown } = await runSplit(userPublicKey, incomeAmount, paymentRef);
     console.log(`[split] OK  txHash=${txHash}  user=${userPublicKey}`);
     res.json({
       success: true,

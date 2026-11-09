@@ -1,13 +1,14 @@
 // @vitest-environment node
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import * as S from "@stellar/stellar-sdk";
-import { setRules, getSetupTransactionStatus } from "./contracts";
+import { setRules, getSetupTransactionStatus, executeSplit } from "./contracts";
 const mocks = vi.hoisted(() => ({
   server: {
     getAccount: vi.fn(),
     simulateTransaction: vi.fn(),
     sendTransaction: vi.fn(),
     getTransaction: vi.fn(),
+    pollTransaction: vi.fn(),
   },
 }));
 vi.mock("@stellar/stellar-sdk", async (importOriginal) => {
@@ -45,7 +46,7 @@ beforeEach(() => {
     status: "PENDING",
     hash: "hash",
   });
-  mocks.server.getTransaction.mockResolvedValue({ status: "SUCCESS" });
+  mocks.server.pollTransaction.mockResolvedValue({ status: "SUCCESS" });
 });
 describe("transaction journaling", () => {
   it("does not broadcast if persisting its hash fails", async () => {
@@ -77,6 +78,29 @@ describe("transaction journaling", () => {
     );
     expect(persist).toHaveBeenCalledOnce();
     expect(mocks.server.sendTransaction).toHaveBeenCalledOnce();
+  });
+  it("resends a transaction the network asked to try again later", async () => {
+    vi.useFakeTimers();
+    mocks.server.sendTransaction
+      .mockResolvedValueOnce({ status: "TRY_AGAIN_LATER", hash: "hash" })
+      .mockResolvedValueOnce({ status: "PENDING", hash: "hash" });
+    const done = executeSplit(keypair.publicKey(), 1n, sign);
+    await vi.runAllTimersAsync();
+    await done;
+    vi.useRealTimers();
+    expect(mocks.server.sendTransaction).toHaveBeenCalledTimes(2);
+  });
+  it("gives up with a clear error if the network stays busy", async () => {
+    vi.useFakeTimers();
+    mocks.server.sendTransaction.mockResolvedValue({
+      status: "TRY_AGAIN_LATER",
+      hash: "hash",
+    });
+    const done = executeSplit(keypair.publicKey(), 1n, sign).catch((e) => e);
+    await vi.runAllTimersAsync();
+    expect((await done).message).toContain("La red está ocupada");
+    vi.useRealTimers();
+    expect(mocks.server.pollTransaction).not.toHaveBeenCalled();
   });
   it("uses ledger time when deciding whether a missing transaction can be retried", async () => {
     mocks.server.getTransaction.mockResolvedValue({

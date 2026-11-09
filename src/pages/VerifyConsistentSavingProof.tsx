@@ -14,6 +14,7 @@ import {
   SOROBAN_RPC_URL,
   NETWORK_PASSPHRASE,
   STELLAR_EXPLORER_BASE,
+  CONSISTENT_SAVING_VERIFIER_CONTRACT_ID,
 } from "@/lib/stellar/client";
 
 // ── Types ─────────────────────────────────────────────────────────────────
@@ -34,9 +35,6 @@ type PageState =
 
 // ── Constants ──────────────────────────────────────────────────────────────
 
-const VERIFIER_CONTRACT_ID =
-  import.meta.env.VITE_CONSISTENT_SAVING_VERIFIER_CONTRACT_ID ||
-  "CDBUSPDUC4AYSWPVCX5QQLRVFJUEJDW3BTZ5EOVH77TCJXW3CKC5X6KQ";
 
 const HORIZON_TESTNET = "https://horizon-testnet.stellar.org";
 
@@ -86,7 +84,7 @@ const VerifyConsistentSavingProof = () => {
     async function fetchRecord() {
       try {
         const soroban  = new SorobanRpc.Server(SOROBAN_RPC_URL, { allowHttp: false });
-        const contract = new Contract(VERIFIER_CONTRACT_ID);
+        const contract = new Contract(CONSISTENT_SAVING_VERIFIER_CONTRACT_ID);
 
         // Read-only simulation: call get_proof(nullifier) — no signing needed
         const ephemeral = Keypair.random();

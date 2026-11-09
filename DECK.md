@@ -51,8 +51,8 @@ Propulsor receives your money, automatically splits it into vaults based on rule
 2. **An autonomous agent detects it instantly** — watching the account 24/7, acting before any external pressure has time to intervene.
 3. **It splits automatically** into named, purpose-built vaults — home, emergency fund, big goal — according to the percentages you chose.
 4. **It gets protected** — every vault can be locked by date, by savings goal, or both. No one, not even you under outside pressure, can pull it out early.
-5. **It earns yield on its own** — the big-goal vault's balance is deposited into Blend Protocol right after every split, earning yield from minute one.
-6. **You can prove you save, without showing how much** — a zero-knowledge proof certifies "I have savings ≥ X" or "I saved consistently for the last 6 months," without revealing the real balance to anyone — not a lender, not family, not Propulsor itself.
+5. **It can earn yield** — the user can put their savings into Blend or DeFindex from the app and withdraw any time, signing each move themselves.
+6. **You can prove you save** — a proof verified on-chain certifies "I have savings ≥ X" or "I saved consistently" with a shareable link, bound to the account and checked against its real vaults. Vault balances are still public on-chain today.
 
 ---
 
@@ -110,8 +110,8 @@ Propulsor receives your money, automatically splits it into vaults based on rule
 
 - ✅ `SplitProtocol` and `TimeVault` contracts deployed and running on Stellar Testnet
 - ✅ Autonomous agent (x402) detecting payments and executing splits with no human intervention
-- ✅ Automatic yield integration with Blend Protocol
-- ✅ ZK privacy layer (Groth16/BLS12-381) verifying proofs on-chain
+- ✅ Yield through Blend or DeFindex, signed by the user (testnet USDC)
+- ✅ Verifiable savings proofs (Groth16) checked on-chain; balances still public
 - ✅ Second privacy layer (RISC Zero zkVM) with a deployed BN254 verifier and a real proof verified on-chain
 - 🧪 Fiat on-ramp (SEP-24) implemented and tested against Stellar's reference anchor
 - Validated across three competitive settings: **She Ships 2026**, **Stellar Agentic Payments Hackathon**, **Stellar Hacks — Real-World ZK**

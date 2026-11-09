@@ -13,7 +13,7 @@
 import { useCallback } from "react";
 import { useWallet } from "@/lib/stellar/WalletContext";
 import { useAuth } from "./useAuth";
-import { loadEncryptedSecret, signCustodial } from "@/lib/stellar/custody";
+import { getSocialPassphrase, loadEncryptedSecret, signCustodial } from "@/lib/stellar/custody";
 import type { SignFn } from "@/lib/stellar/contracts";
 
 export function useSigner() {
@@ -34,8 +34,7 @@ export function useSigner() {
           if (!user?.id) throw new Error("Sesión no encontrada");
           const enc = await loadEncryptedSecret(user.id);
           if (!enc) throw new Error("No se encontró la clave cifrada");
-          // Social accounts use userId as the encryption passphrase (no PIN)
-          return signCustodial(txXdr, enc, user.id);
+          return signCustodial(txXdr, enc, await getSocialPassphrase());
         }
         // External wallet (Varial, xBull …)
         return signTransaction(txXdr);

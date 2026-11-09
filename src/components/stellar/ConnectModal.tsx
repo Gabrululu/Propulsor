@@ -7,7 +7,6 @@ import { useVoice } from "@/hooks/useVoice";
 import { userError } from "@/lib/userErrors";
 import PinInput from "@/components/PinInput";
 import {
-  kit,
   FREIGHTER_ID,
   XBULL_ID,
   ALBEDO_ID,
@@ -93,9 +92,7 @@ export default function ConnectModal({
     setBusy(true);
     setError("");
     try {
-      await connectExternal(id);
-      const { address } = await kit.getAddress();
-      onConnected("external", address);
+      onConnected("external", await connectExternal(id));
     } catch (err) {
       fail(err);
     } finally {

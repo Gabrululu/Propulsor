@@ -25,12 +25,6 @@ use serde::Serialize;
 use sha2::{Digest as _, Sha256};
 
 #[derive(Serialize)]
-struct SplitRecord {
-    timestamp: u64,
-    amount_usdc: u64,
-}
-
-#[derive(Serialize)]
 struct Fixture {
     seal_hex: String,
     journal_hex: String,
@@ -187,17 +181,22 @@ fn g2_from_be(bytes: &[u8]) -> G2Affine {
 fn main() {
     // ── 1. Produce a real Groth16Receipt (synthetic input, no Supabase) ────
     // 7 distinct qualifying months out of 12 → passes = true (threshold 6).
-    let mut splits = Vec::new();
+    let mut history = Vec::new();
     for month in 1..=7u64 {
         let ts = 1_700_000_000u64 + month * 30 * 86_400; // rough month spacing
-        splits.push(SplitRecord { timestamp: ts, amount_usdc: 5_0000000 }); // $5
+        history.extend_from_slice(&ts.to_be_bytes());
+        history.extend_from_slice(&5_0000000i128.to_be_bytes()); // $5
     }
-    let min_amount_usdc: u64 = 1_0000000; // $1
+    let user_hash = [0u8; 32];
+    let as_of: u64 = 1_700_000_000 + 8 * 30 * 86_400;
+    let min_amount: u64 = 1_0000000; // $1
     let threshold_months: u32 = 6;
 
     let env = ExecutorEnv::builder()
-        .write(&splits).unwrap()
-        .write(&min_amount_usdc).unwrap()
+        .write(&user_hash).unwrap()
+        .write(&history).unwrap()
+        .write(&as_of).unwrap()
+        .write(&min_amount).unwrap()
         .write(&threshold_months).unwrap()
         .build()
         .unwrap();

@@ -42,6 +42,7 @@ const encoded = {
   delta: g2ToHex([[vk.vk_delta_2[0][0], vk.vk_delta_2[0][1]], [vk.vk_delta_2[1][0], vk.vk_delta_2[1][1]]]),
   ic_0:  g1ToHex([vk.IC[0][0], vk.IC[0][1]]),
   ic_1:  g1ToHex([vk.IC[1][0], vk.IC[1][1]]),
+  ic_2:  g1ToHex([vk.IC[2][0], vk.IC[2][1]]),
 };
 
 const outPath = join(__dirname, "vk_encoded.json");

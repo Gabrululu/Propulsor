@@ -183,11 +183,15 @@ Confirmed against the real `fixture.json` end-to-end (Phase 1 exit criteria, 202
 | `(c0, c1)` (derived from journal) | | ✅ (computed in-contract) |
 | `seal` (a, b, c) | | ✅ |
 
-## 5b. Journal field parsing is NOT security-critical
+## 5b. Journal layout and what the contract checks
 
-`ConsistentSavingVerifier` also reads `months_with_saving` / `threshold_months` out of the journal bytes to store in `ProofRecord` for the UI. The guest serializes its `Journal` struct via `risc0_zkvm::serde` (`risc0/zkvm/src/serde/`), a custom word-oriented format — **not** a flat struct-field byte layout, so the contract's current placeholder parsing (`parse_journal` in `consistent_saving_verifier/src/lib.rs`) is almost certainly wrong and needs its own derivation from `risc0_zkvm::serde::serializer.rs` before it's trusted for display.
+Since 2026-11-07 the guest commits raw bytes with `env::commit_slice`, all integers big-endian (88 bytes):
 
-This is explicitly a lower-priority gap than §3's public-input derivation: the cryptographic guarantee — that this journal was genuinely produced by the `consistent_saving` guest — comes entirely from `journal_digest = sha256(journal)` feeding into the pairing check over the *raw, whole* journal bytes (§3c), which does not require understanding the journal's internal structure at all. A wrong `parse_journal` produces wrong *display* numbers on an otherwise-correctly-verified proof; it cannot make an invalid proof verify. Fix before shipping the UI, not before trusting `verify_proof`'s pass/fail result.
+```
+months_with_saving u32 | threshold_months u32 | min_amount u64 | as_of u64 | user_hash [32] | history_hash [32]
+```
+
+The pairing check authenticates these bytes. A valid journal is only about whatever input the prover gave the guest, so `verify_proof` also checks what they say: `user_hash` equals sha256 of the `user` argument's Address XDR, `history_hash` equals sha256 of `SplitProtocol.get_split_history(user)` (each record is timestamp, 8 bytes, then income, 16 bytes, big-endian), `as_of` is at most a day old, `threshold_months` meets the deployment's minimum and `months_with_saving` meets `threshold_months`. A split made between proving and submitting changes `history_hash`, so that proof is rejected and must be generated again.
 
 ## 6. Soroban SDK API notes (for Phase 3's implementation)
 

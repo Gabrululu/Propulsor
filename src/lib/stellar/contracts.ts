@@ -103,14 +103,32 @@ function optI128(v: bigint | null): S.xdr.ScVal {
 
 // ── Core: invoke (state-changing) ────────────────────────────
 
-interface InvokeResult {
+export interface InvokeResult {
   returnValue: S.xdr.ScVal;
   txHash: string;
 }
 
 const WALLET_SIGNING_WINDOW_S = 300;
+const SEND_RETRIES = 5;
+const SEND_RETRY_DELAY_MS = 2000;
 
-async function invoke(
+/** TRY_AGAIN_LATER means "not queued": usually the account has a transaction in flight. */
+async function sendWithRetry(server: S.rpc.Server, tx: S.Transaction) {
+  let response = await server.sendTransaction(tx);
+  for (let i = 0; response.status === "TRY_AGAIN_LATER" && i < SEND_RETRIES; i++) {
+    await new Promise((r) => setTimeout(r, SEND_RETRY_DELAY_MS));
+    response = await server.sendTransaction(tx);
+  }
+  if (response.status === "ERROR") {
+    throw new Error(`Envío fallido: ${JSON.stringify(response.errorResult)}`);
+  }
+  if (response.status === "TRY_AGAIN_LATER") {
+    throw new Error("La red está ocupada. Vuelve a intentarlo en unos segundos.");
+  }
+  return response;
+}
+
+export async function invoke(
   contractId: string,
   method: string,
   args: S.xdr.ScVal[],
@@ -156,23 +174,12 @@ async function invoke(
     byte.toString(16).padStart(2, "0"),
   ).join("");
   await beforeSubmit?.({ hash, expiresAt: Number(timeBounds?.maxTime ?? 0) });
-  const response = await server.sendTransaction(signedTx as S.Transaction);
-
-  if (response.status === "ERROR") {
-    throw new Error(`Envío fallido: ${JSON.stringify(response.errorResult)}`);
-  }
+  const response = await sendWithRetry(server, signedTx as S.Transaction);
 
   onProgress?.("Confirmando en el ledger...");
-  let getResponse = await server.getTransaction(response.hash);
-  let attempts = 0;
-  while (
-    getResponse.status === S.rpc.Api.GetTransactionStatus.NOT_FOUND &&
-    attempts < 20
-  ) {
-    await new Promise((r) => setTimeout(r, 1500));
-    getResponse = await server.getTransaction(response.hash);
-    attempts++;
-  }
+  const getResponse = await server.pollTransaction(response.hash, {
+    attempts: 30,
+  });
 
   if (getResponse.status !== S.rpc.Api.GetTransactionStatus.SUCCESS) {
     throw new Error(`Transacción fallida con estado: ${getResponse.status}`);
@@ -216,6 +223,26 @@ async function simulate(
   } catch {
     return null;
   }
+}
+
+/** Read-only contract call. Returns null if the simulation fails. */
+export const readContract = simulate;
+
+/** Submit a transaction that is already signed (e.g. one built by a third party). */
+export async function submitSigned(
+  signedXdr: string,
+  onProgress?: ProgressFn,
+): Promise<string> {
+  const server = rpcServer();
+  const tx = S.TransactionBuilder.fromXDR(signedXdr, NETWORK_PASSPHRASE);
+  onProgress?.("Enviando a Stellar Testnet...");
+  const response = await sendWithRetry(server, tx as S.Transaction);
+  onProgress?.("Confirmando en el ledger...");
+  const result = await server.pollTransaction(response.hash, { attempts: 30 });
+  if (result.status !== S.rpc.Api.GetTransactionStatus.SUCCESS) {
+    throw new Error(`Transacción fallida con estado: ${result.status}`);
+  }
+  return response.hash;
 }
 
 // ── SPLIT PROTOCOL ───────────────────────────────────────────

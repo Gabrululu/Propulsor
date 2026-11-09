@@ -1,7 +1,8 @@
 #![no_std]
 
 use soroban_sdk::{
-    contract, contractimpl, contracttype, contracterror, panic_with_error,
+    ContractExecutable,
+    contract, contractevent, contractimpl, contracttype, contracterror, panic_with_error, symbol_short,
     Address, BytesN, Env, Symbol, Vec,
 };
 
@@ -15,6 +16,8 @@ use soroban_sdk::{
 // ---------------------------------------------------------------------------
 const LEDGER_THRESHOLD: u32 = 518_400;   // 30 days
 const LEDGER_EXTEND_TO: u32 = 3_110_400; // 180 days
+
+const ADMIN_KEY: Symbol = symbol_short!("admin");
 
 // Split history keeps one record per 10-day window for a bit over a year, so
 // its size stays bounded no matter how often a user splits.
@@ -68,11 +71,66 @@ pub enum SplitError {
 // Contract
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// Events. Same topics and data as the earlier env.events().publish calls, so
+// anything reading them sees no change.
+// ---------------------------------------------------------------------------
+
+#[contractevent(topics = ["rules_set"], data_format = "single-value")]
+pub struct RulesSet {
+    #[topic]
+    pub user: Address,
+    pub rule_count: u32,
+}
+
+#[contractevent(topics = ["agent_set"], data_format = "single-value")]
+pub struct AgentSet {
+    #[topic]
+    pub user: Address,
+    pub agent: Address,
+}
+
+/// Data is always 0; kept for compatibility with the earlier event shape.
+#[contractevent(topics = ["agent_off"], data_format = "single-value")]
+pub struct AgentOff {
+    #[topic]
+    pub user: Address,
+    pub data: u32,
+}
+
+#[contractevent(topics = ["split_done"], data_format = "single-value")]
+pub struct SplitDone {
+    #[topic]
+    pub user: Address,
+    pub income: i128,
+}
+
+/// Data is always 0; kept for compatibility with the earlier event shape.
+#[contractevent(topics = ["reset"], data_format = "single-value")]
+pub struct Reset {
+    #[topic]
+    pub user: Address,
+    pub data: u32,
+}
+
 #[contract]
 pub struct SplitProtocol;
 
 #[contractimpl]
 impl SplitProtocol {
+    /// `admin` may upgrade the contract's code and nothing else.
+    pub fn __constructor(env: Env, admin: Address) {
+        env.storage().instance().set(&ADMIN_KEY, &admin);
+        env.storage().instance().extend_ttl(LEDGER_THRESHOLD, LEDGER_EXTEND_TO);
+    }
+
+    /// Replace this contract's code, keeping its address and data.
+    pub fn upgrade(env: Env, new_wasm_hash: BytesN<32>) {
+        let admin: Address = env.storage().instance().get(&ADMIN_KEY).unwrap();
+        admin.require_auth();
+        env.deployer().update_current_contract(ContractExecutable::Wasm(new_wasm_hash));
+    }
+
     /// Configure split percentages for a user.
     /// Rules vec must have 1–3 entries; each percentage must be in [1, 100];
     /// all percentages must sum to exactly 100.
@@ -109,10 +167,7 @@ impl SplitProtocol {
             .extend_ttl(&key, LEDGER_THRESHOLD, LEDGER_EXTEND_TO);
 
         Self::extend_instance(&env);
-        env.events().publish(
-            (Symbol::new(&env, "rules_set"), user),
-            rules.len(),
-        );
+        RulesSet { user, rule_count: rules.len() }.publish(&env);
     }
 
     /// Split income across vaults according to stored rules.
@@ -134,8 +189,7 @@ impl SplitProtocol {
             .persistent()
             .extend_ttl(&key, LEDGER_THRESHOLD, LEDGER_EXTEND_TO);
         Self::extend_instance(&env);
-        env.events()
-            .publish((Symbol::new(&env, "agent_set"), user), agent);
+        AgentSet { user, agent }.publish(&env);
     }
 
     /// Remove the user's agent authorization.
@@ -144,8 +198,7 @@ impl SplitProtocol {
         env.storage()
             .persistent()
             .remove(&(Symbol::new(&env, "agent"), user.clone()));
-        env.events()
-            .publish((Symbol::new(&env, "agent_off"), user), 0_u32);
+        AgentOff { user, data: 0 }.publish(&env);
     }
 
     /// The agent this user authorized, if any (no auth required).
@@ -289,10 +342,7 @@ impl SplitProtocol {
         Self::record_split(env, user, income);
         Self::extend_instance(env);
 
-        env.events().publish(
-            (Symbol::new(env, "split_done"), user.clone()),
-            income,
-        );
+        SplitDone { user: user.clone(), income }.publish(env);
 
         balances
     }
@@ -316,8 +366,7 @@ impl SplitProtocol {
             .persistent()
             .remove(&(sym_bals, user.clone()));
 
-        env.events()
-            .publish((Symbol::new(&env, "reset"), user), 0_u32);
+        Reset { user, data: 0 }.publish(&env);
     }
 
     fn load_rules(env: &Env, user: &Address) -> Vec<SplitRule> {

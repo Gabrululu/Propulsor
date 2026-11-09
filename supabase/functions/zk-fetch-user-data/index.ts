@@ -1,16 +1,14 @@
 /**
  * zk-fetch-user-data — Supabase Edge Function
  *
- * Returns one user's split history (from the SplitProtocol contract) for the RISC Zero
- * host to consume when generating a Proof-of-Consistent-Saving.
+ * Returns one user's Stellar account and split history (from the SplitProtocol
+ * contract) for the RISC Zero host to consume when generating a Proof-of-Consistent-Saving.
  *
  * The GitHub Actions runner has no service_role access (Lovable Cloud only
  * injects that key inside Edge Functions, never exposes it for external
  * secrets) — same constraint the Railway agent already works around via
  * agent-webhook/agent-watchlist. This function is that same pattern applied
- * to the one read the RISC Zero host needs, scoped to exactly the fields the
- * guest circuit consumes (created_at, amount_usdc) — nothing else about the
- * user is exposed.
+ * to the one read the RISC Zero host needs.
  *
  * Authenticated with the same shared secret as agent-webhook/agent-watchlist
  * would use for this purpose — here, ZK_WEBHOOK_SECRET.
@@ -23,6 +21,7 @@ import {
   Address,
   BASE_FEE,
   Contract,
+  hash,
   Networks,
   rpc,
   scValToNative,
@@ -35,24 +34,24 @@ const corsHeaders = {
 };
 
 const RPC_URL = Deno.env.get("SOROBAN_RPC_URL") ?? "https://soroban-testnet.stellar.org";
-const SPLIT_CONTRACT_ID = "CAZGYZEJJJ2GQMVEX4MKJ633JNCMGC5WH4P2P6PEXQBMH2VYX5Q2G3BI";
-const STROOPS_PER_USDC = 10_000_000;
-const ONE_YEAR_MS = 365 * 24 * 60 * 60 * 1000;
+const SPLIT_CONTRACT_ID = "CDGPRA63HQC75LNH6KRUSQPLRZPERTNSBVY3I4UEAKCPHEXHDYEMKEPT";
+
+const toHex = (bytes: Uint8Array) =>
+  Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
 
 /**
- * The last 12 months of the account's splits, read from the SplitProtocol
- * contract: only the account or an agent it authorized can add to this record,
- * and anyone can check it by calling get_split_history. Throws if unreadable,
- * so a network failure can't be mistaken for "this user never saved".
+ * What the RISC Zero guest needs about an account, read from SplitProtocol. The
+ * verifier contract recomputes both hashes from the chain, so this function
+ * can't make a false proof pass. Throws if the contract can't be read, so a
+ * network failure can't be mistaken for "this user never saved".
  */
-async function readSplitHistory(publicKey: string) {
+async function readUserData(publicKey: string) {
+  const address = new Address(publicKey).toScVal();
   const tx = new TransactionBuilder(new Account(publicKey, "0"), {
     fee: BASE_FEE,
     networkPassphrase: Networks.TESTNET,
   })
-    .addOperation(
-      new Contract(SPLIT_CONTRACT_ID).call("get_split_history", new Address(publicKey).toScVal()),
-    )
+    .addOperation(new Contract(SPLIT_CONTRACT_ID).call("get_split_history", address))
     .setTimeout(30)
     .build();
 
@@ -61,14 +60,18 @@ async function readSplitHistory(publicKey: string) {
     throw new Error("Could not read split history from the contract");
   }
 
-  const history = scValToNative(sim.result.retval) as Array<{ timestamp: bigint; income: bigint }>;
-  const cutoff = Date.now() - ONE_YEAR_MS;
-  return history
-    .map((split) => ({
-      created_at: new Date(Number(split.timestamp) * 1000).toISOString(),
-      amount_usdc: Number(split.income) / STROOPS_PER_USDC,
-    }))
-    .filter((split) => new Date(split.created_at).getTime() >= cutoff);
+  const records = scValToNative(sim.result.retval) as Array<{ timestamp: bigint; income: bigint }>;
+  const history = records
+    .map(({ timestamp, income }) =>
+      timestamp.toString(16).padStart(16, "0") + income.toString(16).padStart(32, "0")
+    )
+    .join("");
+
+  return {
+    public_key: publicKey,
+    user_hash: toHex(hash(address.toXDR())),
+    history,
+  };
 }
 
 serve(async (req) => {
@@ -113,11 +116,14 @@ serve(async (req) => {
       });
     }
 
-    const splits = profile?.stellar_public_key
-      ? await readSplitHistory(profile.stellar_public_key)
-      : [];
+    if (!profile?.stellar_public_key) {
+      return new Response(JSON.stringify({ error: "No Stellar account for this user" }), {
+        status: 404,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
 
-    return new Response(JSON.stringify(splits), {
+    return new Response(JSON.stringify(await readUserData(profile.stellar_public_key)), {
       status: 200,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });

@@ -33,6 +33,41 @@ export function userError(error: unknown, language: Language = "es"): string {
       "We could not save your profile. Check your connection and try again.",
     ],
     [
+      /FAUCET_UNAVAILABLE/,
+      "El faucet de Blend no respondió. Vuelve a intentarlo en unos minutos.",
+      "Blend's faucet did not respond. Try again in a few minutes.",
+    ],
+    [
+      /FAUCET_TX_REJECTED/,
+      "La transacción del faucet hacía algo distinto a enviarte USDC de prueba, así que no la firmamos.",
+      "The faucet transaction did more than send you test USDC, so we did not sign it.",
+    ],
+    [
+      /YIELD_UNAVAILABLE/,
+      "No pudimos leer el protocolo de rendimiento. Vuelve a intentarlo en unos segundos.",
+      "We could not read the yield protocol. Try again in a few seconds.",
+    ],
+    [
+      /NOTHING_TO_WITHDRAW/,
+      "No tienes fondos depositados en este protocolo.",
+      "You have no funds deposited in this protocol.",
+    ],
+    [
+      /INVALID_AMOUNT/,
+      "Ingresa un monto mayor que cero.",
+      "Enter an amount greater than zero.",
+    ],
+    [
+      /WRONG_NETWORK/,
+      "Tu wallet está en otra red. Cámbiala a Testnet y vuelve a intentarlo.",
+      "Your wallet is on another network. Switch it to Testnet and try again.",
+    ],
+    [
+      /WALLET_KEY_UNAVAILABLE/,
+      "No pudimos acceder a tu cuenta segura. Comprueba tu conexión y vuelve a intentarlo.",
+      "We could not access your secure account. Check your connection and try again.",
+    ],
+    [
       /INCORRECT_PIN|OperationError|incorrect.*pin|pin.*incorrect/i,
       "El PIN no es correcto. Ingresa tus 4 dígitos e inténtalo de nuevo.",
       "Incorrect PIN. Enter your 4 digits and try again.",

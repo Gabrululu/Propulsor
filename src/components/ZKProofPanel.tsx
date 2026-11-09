@@ -2,18 +2,12 @@ import { useState, useCallback } from "react";
 import { useContracts } from "@/hooks/useContracts";
 import { useSigner } from "@/hooks/useSigner";
 import { userError } from "@/lib/userErrors";
+import { STELLAR_EXPLORER_BASE, ZK_VERIFIER_CONTRACT_ID } from "@/lib/stellar/client";
+import { invoke } from "@/lib/stellar/contracts";
 import {
-  SOROBAN_RPC_URL,
-  NETWORK_PASSPHRASE,
-  STELLAR_EXPLORER_BASE,
-} from "@/lib/stellar/client";
-import {
-  Contract,
   Address,
   xdr,
-  rpc as SorobanRpc,
-  TransactionBuilder,
-  BASE_FEE,
+  hash,
   scValToNative,
 } from "@stellar/stellar-sdk";
 
@@ -27,21 +21,7 @@ type ProofState =
   | { status: "done"; proofHash: string; txHash: string; thresholdUsdc: number }
   | { status: "error"; message: string };
 
-// ── Constants ──────────────────────────────────────────────────────────────
-
-// Deployed ProofOfVaultVerifier contract on Stellar Testnet
-// Update after deploying with: stellar contract deploy ...
-const VERIFIER_CONTRACT_ID =
-  import.meta.env.VITE_ZK_VERIFIER_CONTRACT_ID ||
-  "CAGUCQUMNSOJALPFM3A2T2TBDIDCFUDY3UQA6JIWAN4ZP3COPQ7HP7BU";
-
 // ── Helpers ───────────────────────────────────────────────────────────────
-
-function hexToBytes(hex: string): Uint8Array {
-  const arr = new Uint8Array(hex.length / 2);
-  for (let i = 0; i < arr.length; i++) arr[i] = parseInt(hex.slice(i * 2, i * 2 + 2), 16);
-  return arr;
-}
 
 function bytesToHex(buf: Uint8Array): string {
   return Array.from(buf).map(b => b.toString(16).padStart(2, "0")).join("");
@@ -77,8 +57,19 @@ function signalToFr32(signal: string): string {
   return bigintToHex32(BigInt(signal));
 }
 
+/**
+ * sha256(account's Address XDR) with its first byte cleared to fit the field.
+ * ProofOfVaultVerifier recomputes this, so a proof only works for this account.
+ */
+function userBinding(publicKey: string): string {
+  const digest = hash(new Address(publicKey).toScVal().toXDR());
+  digest[0] = 0;
+  return BigInt(`0x${bytesToHex(digest)}`).toString();
+}
+
 function hexToScBytesN(hex: string): xdr.ScVal {
-  return xdr.ScVal.scvBytes(hexToBytes(hex) as unknown as Parameters<typeof xdr.ScVal.scvBytes>[0]);
+  const bytes = Uint8Array.from(hex.match(/../g) ?? [], (byte) => parseInt(byte, 16));
+  return xdr.ScVal.scvBytes(bytes as unknown as Parameters<typeof xdr.ScVal.scvBytes>[0]);
 }
 
 // ── Component ─────────────────────────────────────────────────────────────
@@ -94,7 +85,7 @@ const ZKProofPanel = () => {
   const stepMsg = (s: ProofState): string => {
     switch (s.status) {
       case "fetching-balance": return "Leyendo tu bóveda \"Meta grande\"...";
-      case "generating":       return "Generando prueba privada en tu dispositivo...";
+      case "generating":       return "Generando la prueba en tu dispositivo...";
       case "submitting":       return "Enviando prueba a Stellar...";
       default: return "";
     }
@@ -150,6 +141,7 @@ const ZKProofPanel = () => {
       const input = {
         actual_balance: balanceStroops.toString(),
         threshold:      thresholdStroops.toString(),
+        user_binding:   userBinding(publicKey),
       };
 
       // Proof generation happens entirely off-chain in the browser
@@ -172,64 +164,27 @@ const ZKProofPanel = () => {
       // 3. Submit to ProofOfVaultVerifier on Stellar
       setState({ status: "submitting" });
 
-      const soroban  = new SorobanRpc.Server(SOROBAN_RPC_URL, { allowHttp: false });
-      const contract = new Contract(VERIFIER_CONTRACT_ID);
-      const account  = await soroban.getAccount(publicKey);
-
       const proofScVal = xdr.ScVal.scvMap([
         new xdr.ScMapEntry({ key: xdr.ScVal.scvSymbol("a"), val: hexToScBytesN(negAHex) }),
         new xdr.ScMapEntry({ key: xdr.ScVal.scvSymbol("b"), val: hexToScBytesN(bHex) }),
         new xdr.ScMapEntry({ key: xdr.ScVal.scvSymbol("c"), val: hexToScBytesN(cHex) }),
       ]);
 
-      const tx = new TransactionBuilder(account, {
-        fee: BASE_FEE,
-        networkPassphrase: NETWORK_PASSPHRASE,
-      })
-        .addOperation(contract.call(
-          "verify_proof",
-          new Address(publicKey).toScVal(),
-          proofScVal,
-          hexToScBytesN(thresholdFr32),
-        ))
-        // Leave time to review and confirm in the wallet; 30s failed with tx_too_late
-        .setTimeout(300)
-        .build();
-
-      const sim = await soroban.simulateTransaction(tx);
-      if (SorobanRpc.Api.isSimulationError(sim)) {
-        throw new Error(`Simulación falló: ${sim.error}`);
-      }
-
-      const assembled = SorobanRpc.assembleTransaction(tx, sim).build();
-      const signedXdr = await makeSign(mode === "custodial" ? pin : undefined)(assembled.toXDR());
-      const signedTx = TransactionBuilder.fromXDR(signedXdr, NETWORK_PASSPHRASE);
-
-      const sendResult = await soroban.sendTransaction(signedTx);
-      if (sendResult.status === "ERROR") {
-        throw new Error(`Envío fallido: ${JSON.stringify(sendResult.errorResult)}`);
-      }
-
-      // Poll for confirmation
-      let confirmed = await soroban.getTransaction(sendResult.hash);
-      let attempts = 0;
-      while (confirmed.status === SorobanRpc.Api.GetTransactionStatus.NOT_FOUND && attempts++ < 30) {
-        await new Promise(r => setTimeout(r, 1000));
-        confirmed = await soroban.getTransaction(sendResult.hash);
-      }
-
-      if (confirmed.status !== SorobanRpc.Api.GetTransactionStatus.SUCCESS) {
-        throw new Error(`Transacción fallida (estado: ${confirmed.status})`);
-      }
+      const { returnValue, txHash } = await invoke(
+        ZK_VERIFIER_CONTRACT_ID,
+        "verify_proof",
+        [new Address(publicKey).toScVal(), proofScVal, hexToScBytesN(thresholdFr32)],
+        publicKey,
+        makeSign(mode === "custodial" ? pin : undefined),
+      );
 
       // Extract proof_hash (nullifier) returned by the contract
-      const nullifierRaw = scValToNative(confirmed.returnValue!) as Uint8Array;
-      const proofHash = bytesToHex(nullifierRaw);
+      const proofHash = bytesToHex(scValToNative(returnValue) as Uint8Array);
 
       setState({
         status: "done",
         proofHash,
-        txHash: sendResult.hash,
+        txHash,
         thresholdUsdc,
       });
 
@@ -237,7 +192,7 @@ const ZKProofPanel = () => {
       const message = err instanceof Error ? err.message : "Error desconocido";
       setState({
         status: "error",
-        message: message === "INCORRECT_PIN" ? userError(err) : message,
+        message: /^(INCORRECT_PIN|WRONG_NETWORK|WALLET_KEY_UNAVAILABLE)$/.test(message) ? userError(err) : message,
       });
     } finally {
       setPin("");
@@ -251,14 +206,14 @@ const ZKProofPanel = () => {
       {/* Header */}
       <div>
         <span className="font-mono text-[0.65rem] uppercase tracking-widest text-primary">
-          → PRUEBA PRIVADA
+          → PRUEBA VERIFICABLE
         </span>
         <h3 className="text-lg font-bold text-foreground mt-1">
-          Prueba de ahorro privada
+          Prueba de ahorro
         </h3>
         <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
-          Demuestra que tienes ahorrado más de un monto <span className="text-foreground font-semibold">sin revelar cuánto tienes exactamente</span>.
-          La prueba se genera en tu dispositivo y se verifica de forma pública en Stellar.
+          Demuestra que tienes ahorrado al menos un monto, con un enlace que cualquiera puede comprobar en Stellar.
+          El enlace no muestra tu saldo exacto, pero tus bóvedas se registran en una red pública.
         </p>
       </div>
 
@@ -337,7 +292,7 @@ const ZKProofPanel = () => {
               state.status === "submitting" ? "text-primary" :
               "opacity-40"
             }>
-              {state.status === "generating" ? "▸" : state.status === "submitting" ? "✓" : "○"} Generando prueba privada en tu dispositivo...
+              {state.status === "generating" ? "▸" : state.status === "submitting" ? "✓" : "○"} Generando la prueba en tu dispositivo...
             </p>
             <p className={state.status === "submitting" ? "text-secondary" : "opacity-40"}>
               {state.status === "submitting" ? "▸" : "○"} Verificando en Stellar...
@@ -345,7 +300,7 @@ const ZKProofPanel = () => {
           </div>
           {state.status === "generating" && (
             <p className="text-[0.6rem] text-muted-foreground font-mono">
-              Tu balance real nunca sale de tu dispositivo.
+              La prueba se genera en tu dispositivo.
             </p>
           )}
         </div>

@@ -21,8 +21,8 @@
  *     --contract C...
  *
  * Environment variables (alternative to flags):
- *   STELLAR_SECRET                          — account making the claim (signs the tx)
- *   CONSISTENT_SAVING_VERIFIER_CONTRACT_ID  — deployed ConsistentSavingVerifier address
+ *   STELLAR_SECRET — account paying for the submission. The proof is recorded
+ *                    for fixture.user, whoever submits it.
  */
 
 import {
@@ -43,12 +43,13 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 
 const RPC_URL    = "https://soroban-testnet.stellar.org";
 const PASSPHRASE = Networks.TESTNET;
+const CONSISTENT_SAVING_VERIFIER_CONTRACT_ID = "CA23PPSGHDQNJ5E2ZDS3HVZ4ZO3VEMTEEKLC5C4DKZK77QOJFW2IHREE";
 
 // ── Arg parsing ─────────────────────────────────────────────────────────────
 function getConfig() {
   const args = process.argv.slice(2);
   let secret   = process.env.STELLAR_SECRET ?? "";
-  let contract = process.env.CONSISTENT_SAVING_VERIFIER_CONTRACT_ID ?? "";
+  let contract = CONSISTENT_SAVING_VERIFIER_CONTRACT_ID;
   let fixturePath = join(__dirname, "../risc0/consistent_saving/fixture.json");
 
   for (let i = 0; i < args.length; i++) {
@@ -123,7 +124,7 @@ async function main() {
   })
     .addOperation(contract.call(
       "verify_proof",
-      new Address(keypair.publicKey()).toScVal(),
+      new Address(fixture.user).toScVal(),
       proofScVal,
       journalScVal,
     ))

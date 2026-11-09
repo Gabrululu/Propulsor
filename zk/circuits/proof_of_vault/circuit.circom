@@ -4,39 +4,42 @@ pragma circom 2.0.0;
 include "node_modules/circomlib/circuits/comparators.circom";
 
 /*
- * ProofOfVault — Range proof for Stellar/Propulsor
+ * ProofOfVault — range proof for Stellar/Propulsor
  *
- * Proves that a vault balance satisfies a minimum threshold
- * WITHOUT revealing the exact balance.
+ * Proves knowledge of a balance >= threshold, for one specific account.
  *
- * Private inputs (never leave the device):
- *   actual_balance  — vault_2 balance in USDC base units (7 decimals)
+ * Private input:
+ *   actual_balance — vault_2 balance in USDC base units (7 decimals)
  *
- * Public inputs (visible to verifier):
- *   threshold       — minimum balance to prove (same units)
+ * Public inputs:
+ *   threshold      — minimum balance to prove (same units)
+ *   user_binding   — sha256(account's Address XDR) with its first byte cleared
  *
- * Constraint:
- *   actual_balance >= threshold   (proof fails if not satisfied)
+ * ProofOfVaultVerifier recomputes user_binding and checks the real balance in
+ * SplitProtocol, since this circuit can't know whether actual_balance is true.
  *
  * Proof system : Groth16
  * Curve        : BLS12-381  (compile with: circom circuit.circom --r1cs --wasm -p bls12381)
- * Verifier     : ProofOfVaultVerifier Soroban contract
  */
 template ProofOfVault() {
-    // ── Signals ──────────────────────────────────────────────
-    signal input actual_balance;   // private — stays on device
-    signal input threshold;        // public  — included in public.json
+    signal input actual_balance;
+    signal input threshold;
+    signal input user_binding;
 
-    // ── Constraint ───────────────────────────────────────────
-    // GreaterEqThan(n) requires n-bit inputs → use 64 for u64 USDC amounts
+    // The comparator only works on inputs that fit its bit width
+    component balance_bits = Num2Bits(64);
+    balance_bits.in <== actual_balance;
+    component threshold_bits = Num2Bits(64);
+    threshold_bits.in <== threshold;
+
     component gte = GreaterEqThan(64);
     gte.in[0] <== actual_balance;
     gte.in[1] <== threshold;
-
-    // Force the circuit to fail if the constraint is not satisfied.
-    // A valid proof guarantees gte.out == 1 (actual_balance >= threshold).
     gte.out === 1;
+
+    // Puts user_binding in a constraint so it can't be optimized out of the proof
+    signal user_binding_squared;
+    user_binding_squared <== user_binding * user_binding;
 }
 
-// threshold is the public input; actual_balance stays private
-component main { public [threshold] } = ProofOfVault();
+component main { public [threshold, user_binding] } = ProofOfVault();

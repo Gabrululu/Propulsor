@@ -33,10 +33,13 @@ setup:
 	@echo "→ Phase 1: Powers of Tau (BLS12-381, size=$(PTAU_SIZE))..."
 	snarkjs powersoftau new bls12-381 $(PTAU_SIZE) pot$(PTAU_SIZE)_0000.ptau -v
 	snarkjs powersoftau contribute pot$(PTAU_SIZE)_0000.ptau pot$(PTAU_SIZE)_0001.ptau \
-	  --name="Propulsor hackathon" -e="propulsor zk proof of vault"
+	  --name="Propulsor testnet" -e="$$(head -c 64 /dev/urandom | base64 -w0)"
 	snarkjs powersoftau prepare phase2 pot$(PTAU_SIZE)_0001.ptau $(PTAU_FILE) -v
 	@echo "→ Phase 2: Groth16 circuit-specific setup..."
-	snarkjs groth16 setup build/$(CIRCUIT).r1cs $(PTAU_FILE) $(ZKEY_FILE)
+	snarkjs groth16 setup build/$(CIRCUIT).r1cs $(PTAU_FILE) $(CIRCUIT)_0000.zkey
+	snarkjs zkey contribute $(CIRCUIT)_0000.zkey $(ZKEY_FILE) \
+	  --name="Propulsor testnet" -e="$$(head -c 64 /dev/urandom | base64 -w0)"
+	rm $(CIRCUIT)_0000.zkey
 	@echo "→ Exporting verification key..."
 	snarkjs zkey export verificationkey $(ZKEY_FILE) $(VK_FILE)
 	@echo "✓ $(VK_FILE) ready — use encode_vk.ts to convert for Soroban"
@@ -44,7 +47,7 @@ setup:
 
 test:
 	@echo "→ Generating witness from sample input..."
-	@echo '{"actual_balance":"1000000000","threshold":"500000000"}' > input_test.json
+	@echo '{"actual_balance":"1000000000","threshold":"500000000","user_binding":"12345"}' > input_test.json
 	node build/$(CIRCUIT)_js/generate_witness.js build/$(CIRCUIT)_js/$(CIRCUIT).wasm \
 	  input_test.json witness_test.wtns
 	snarkjs groth16 prove $(ZKEY_FILE) witness_test.wtns proof_test.json public_test.json

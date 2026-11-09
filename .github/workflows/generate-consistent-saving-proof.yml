@@ -18,7 +18,7 @@ on:
 jobs:
   generate-and-submit:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
 
@@ -29,8 +29,12 @@ jobs:
           curl -L https://risczero.com/install | bash
           echo "$HOME/.risc0/bin" >> "$GITHUB_PATH"
 
+      # Must match risc0-zkvm in zk/risc0/consistent_saving/host/Cargo.toml. The
+      # guest itself builds in Docker, so its image ID doesn't depend on this.
       - name: rzup install
-        run: rzup install
+        run: |
+          rzup install cargo-risczero 3.0.6
+          rzup install r0vm 3.0.6
 
       - name: Generate Groth16 proof (RISC Zero host — several minutes)
         working-directory: zk/risc0/consistent_saving
@@ -80,7 +84,6 @@ jobs:
         env:
           JOB_ID: ${{ inputs.job_id }}
           STELLAR_SECRET: ${{ secrets.ZK_SUBMITTER_STELLAR_SECRET }}
-          CONSISTENT_SAVING_VERIFIER_CONTRACT_ID: ${{ vars.CONSISTENT_SAVING_VERIFIER_CONTRACT_ID }}
         run: |
           pnpm install --frozen-lockfile
           pnpm exec tsx scripts/verify_onchain_consistent_saving.ts \

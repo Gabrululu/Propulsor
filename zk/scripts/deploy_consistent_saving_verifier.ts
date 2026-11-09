@@ -3,15 +3,17 @@
  * __constructor (Protocol 22)
  *
  * Uploads WASM then deploys atomically with constructor args
- * (admin, vk, image_id) — mirrors deploy_contract.ts's pattern for
+ * (admin, vk, image_id, split_contract, min_months) — mirrors deploy_contract.ts's pattern for
  * ProofOfVaultVerifier, generalized to ConsistentSavingVerifier's extra
  * image_id constructor arg and 10-field VK (vs. 6 for the BLS12-381 circuit).
  *
  * Usage:
- *   pnpm exec tsx scripts/deploy_consistent_saving_verifier.ts --secret S...
+ *   pnpm exec tsx scripts/deploy_consistent_saving_verifier.ts --secret S... --split C...
+ *     [--min-months 6]   lowest threshold this deployment accepts
  *
  * Environment variables:
- *   STELLAR_SECRET — deployer account (becomes the contract's admin)
+ *   STELLAR_SECRET    — deployer account (becomes the contract's admin)
+ *   SPLIT_CONTRACT_ID — SplitProtocol deployment proofs are checked against
  *
  * Prerequisites:
  *   - contracts/consistent_saving_verifier built for wasm32v1-none:
@@ -35,7 +37,9 @@ import {
   BASE_FEE,
   Operation,
   hash,
+  nativeToScVal,
 } from "@stellar/stellar-sdk";
+import { randomBytes } from "crypto";
 import { readFileSync } from "fs";
 import { join, dirname } from "path";
 import { fileURLToPath } from "url";
@@ -52,13 +56,18 @@ function getConfig() {
     "../contracts/consistent_saving_verifier/target/wasm32v1-none/release/consistent_saving_verifier.wasm",
   );
   let imageId = "";
+  let split = process.env.SPLIT_CONTRACT_ID ?? "";
+  let minMonths = 6;
   for (let i = 0; i < args.length; i++) {
     if (args[i] === "--secret"    && args[i + 1]) secret  = args[++i];
     if (args[i] === "--wasm"      && args[i + 1]) wasmPath = args[++i];
     if (args[i] === "--image-id"  && args[i + 1]) imageId = args[++i];
+    if (args[i] === "--split"     && args[i + 1]) split = args[++i];
+    if (args[i] === "--min-months" && args[i + 1]) minMonths = Number(args[++i]);
   }
   if (!secret) { console.error("Missing --secret or STELLAR_SECRET"); process.exit(1); }
-  return { secret, wasmPath, imageId };
+  if (!split)  { console.error("Missing --split or SPLIT_CONTRACT_ID"); process.exit(1); }
+  return { secret, wasmPath, imageId, split, minMonths };
 }
 
 function hexToScBytesN(hexStr: string): xdr.ScVal {
@@ -95,7 +104,7 @@ async function submitTx(
 }
 
 async function main() {
-  const { secret, wasmPath, imageId: imageIdArg } = getConfig();
+  const { secret, wasmPath, imageId: imageIdArg, split, minMonths } = getConfig();
   const keypair = Keypair.fromSecret(secret);
   const soroban = new SorobanRpc.Server(RPC_URL, { allowHttp: false });
 
@@ -124,7 +133,7 @@ async function main() {
   const wasmHash = Buffer.from(hash(wasmBytes));
   console.log(`✓ WASM hash: ${wasmHash.toString("hex")}`);
 
-  // Step 2: Build constructor args — (admin, vk, image_id), matching
+  // Step 2: Build constructor args — (admin, vk, image_id, split_contract, min_months), matching
   // ConsistentSavingVerifier::__constructor's parameter order exactly.
   // Soroban map keys must be in sorted order for canonical XDR — alpha,
   // beta, delta, gamma, ic_0..ic_5 (delta sorts before gamma).
@@ -149,11 +158,17 @@ async function main() {
     contractIdPreimage: xdr.ContractIdPreimage.contractIdPreimageFromAddress(
       new xdr.ContractIdPreimageFromAddress({
         address: new Address(keypair.publicKey()).toScAddress(),
-        salt: Buffer.alloc(32),
+        salt: randomBytes(32),
       })
     ),
     executable: xdr.ContractExecutable.contractExecutableWasm(wasmHash),
-    constructorArgs: [adminScVal, vkScVal, imageIdScVal],
+    constructorArgs: [
+      adminScVal,
+      vkScVal,
+      imageIdScVal,
+      new Address(split).toScVal(),
+      nativeToScVal(minMonths, { type: "u32" }),
+    ],
   });
 
   const hostFn = xdr.HostFunction.hostFunctionTypeCreateContractV2(createArgs);

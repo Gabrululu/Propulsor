@@ -18,7 +18,7 @@ fn make_env() -> (Env, Address) {
 }
 
 fn register(env: &Env) -> TimeVaultClient<'_> {
-    let id = env.register(TimeVault, ());
+    let id = env.register(TimeVault, (Address::generate(env),));
     TimeVaultClient::new(env, &id)
 }
 

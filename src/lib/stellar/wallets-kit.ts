@@ -1,23 +1,10 @@
 /**
- * Stellar Wallets Kit — lightweight abstraction
- * Supports: Varial (extension), xBull (extension), Albedo (web), Lobstr (extension)
- * Pattern matches @creit.tech/stellar-wallets-kit API without native USB deps
+ * Wallet connections through each wallet's official SDK, imported on demand.
+ * API shaped like Stellar Wallets Kit, which pulls in Ledger, Trezor and
+ * WalletConnect dependencies this app doesn't use.
  */
 
 import { NETWORK_PASSPHRASE } from "./client";
-
-declare global {
-  interface Window {
-    xBullSDK?: {
-      connect(opts: { canRequestPublicKey: boolean }): Promise<string>;
-      signXDR(xdr: string, opts: { network: string }): Promise<string>;
-    };
-    lobstrSignerExtension?: {
-      getPublicKey(): Promise<string>;
-      signTransaction(xdr: string): Promise<string>;
-    };
-  }
-}
 
 // ── Wallet IDs ──────────────────────────────────────────────
 export const FREIGHTER_ID = "freighter";
@@ -37,109 +24,130 @@ export interface WalletModule {
   signTransaction: (txXdr: string, opts: { networkPassphrase: string; address: string }) => Promise<string>;
 }
 
-// ── Varial Module ────────────────────────────────────────
+// ── Varial Module ───────────────────────────────────────────
 function createVarialModule(): WalletModule {
+  const getAddress = async () => {
+    const { getAddress } = await import("@stellar/varial-sdk");
+    const { address, error } = await getAddress();
+    if (error) throw new Error(error.message);
+    if (!address) throw new Error("Varial no devolvió una dirección. Inicia sesión en la extensión primero.");
+    return address;
+  };
   return {
     id: FREIGHTER_ID,
     name: "Varial",
     icon: "V",
     async isAvailable() {
       try {
-        const walletApi = await import("@stellar/freighter-api");
-        const result = await walletApi.isConnected();
-        return !!result;
+        const { isConnected } = await import("@stellar/varial-sdk");
+        const { isConnected: installed, error } = await isConnected();
+        return !error && installed;
       } catch {
         return false;
       }
     },
     async requestAccess() {
-      const walletApi = await import("@stellar/freighter-api");
-      const result = await walletApi.requestAccess();
-      if ("error" in result) throw new Error(result.error);
-      // requestAccess can return empty string if user hasn't signed in yet
-      if (!result.address) {
-        // Retry with getAddress after access was granted
-        const addrResult = await walletApi.getAddress();
-        if ("error" in addrResult) throw new Error(addrResult.error);
-        if (!addrResult.address) throw new Error("No se obtuvo la dirección de Varial. Asegúrate de estar logueado en la extensión.");
-        return addrResult.address;
-      }
-      return result.address;
+      const { requestAccess } = await import("@stellar/varial-sdk");
+      const { address, error } = await requestAccess();
+      if (error) throw new Error(error.message);
+      return address || getAddress();
     },
-    async getAddress() {
-      const walletApi = await import("@stellar/freighter-api");
-      const result = await walletApi.getAddress();
-      if ("error" in result) throw new Error(result.error);
-      if (!result.address) throw new Error("Varial no devolvió una dirección. Inicia sesión en la extensión primero.");
-      return result.address;
-    },
+    getAddress,
     async signTransaction(txXdr, opts) {
-      const walletApi = await import("@stellar/freighter-api");
-      const result = await walletApi.signTransaction(txXdr, {
-        networkPassphrase: opts.networkPassphrase,
-        address: opts.address,
-      });
-      if ("error" in result) throw new Error(result.error);
-      return result.signedTxXdr;
+      const { getNetwork, signTransaction } = await import("@stellar/varial-sdk");
+      const { networkPassphrase, error: networkError } = await getNetwork();
+      if (networkError) throw new Error(networkError.message);
+      if (networkPassphrase !== opts.networkPassphrase) throw new Error("WRONG_NETWORK");
+      const { signedTxXdr, error } = await signTransaction(txXdr, opts);
+      if (error) throw new Error(error.message);
+      return signedTxXdr;
     },
   };
 }
 
-// ── Generic Extension Module (xBull, Lobstr) ────────────────
-function createGenericExtensionModule(id: WalletId, name: string, icon: string): WalletModule {
+// ── xBull Module (web bridge, no extension required) ────────
+function createXBullModule(): WalletModule {
+  const withBridge = async <T>(
+    run: (bridge: import("@creit.tech/xbull-wallet-connect").xBullWalletConnect) => Promise<T>,
+  ) => {
+    const { xBullWalletConnect } = await import("@creit.tech/xbull-wallet-connect");
+    const bridge = new xBullWalletConnect();
+    try {
+      return await run(bridge);
+    } finally {
+      bridge.closeConnections();
+    }
+  };
+  const getAddress = () => withBridge((bridge) => bridge.connect());
   return {
-    id,
-    name,
-    icon,
+    id: XBULL_ID,
+    name: "xBull",
+    icon: "🐂",
+    isAvailable: async () => true,
+    requestAccess: getAddress,
+    getAddress,
+    signTransaction: (txXdr, opts) =>
+      withBridge((bridge) =>
+        bridge.sign({ xdr: txXdr, publicKey: opts.address, network: opts.networkPassphrase }),
+      ),
+  };
+}
+
+// ── Lobstr Module (extension) ───────────────────────────────
+function createLobstrModule(): WalletModule {
+  const getAddress = async () => {
+    const { getPublicKey } = await import("@lobstrco/signer-extension-api");
+    return getPublicKey();
+  };
+  return {
+    id: LOBSTR_ID,
+    name: "Lobstr",
+    icon: "🦞",
     async isAvailable() {
-      if (id === XBULL_ID) return typeof window.xBullSDK !== "undefined";
-      if (id === LOBSTR_ID) return typeof window.lobstrSignerExtension !== "undefined";
-      return false;
+      try {
+        const { isConnected } = await import("@lobstrco/signer-extension-api");
+        return await isConnected();
+      } catch {
+        return false;
+      }
     },
-    async requestAccess() {
-      // For extensions, requestAccess is the same as getAddress
-      return this.getAddress();
-    },
-    async getAddress() {
-      if (id === XBULL_ID && window.xBullSDK) {
-        return window.xBullSDK.connect({ canRequestPublicKey: true });
-      }
-      if (id === LOBSTR_ID && window.lobstrSignerExtension) {
-        return window.lobstrSignerExtension.getPublicKey();
-      }
-      throw new Error(`${name} no está instalado. Instala la extensión y recarga la página.`);
-    },
-    async signTransaction(txXdr, opts) {
-      if (id === XBULL_ID && window.xBullSDK) {
-        return window.xBullSDK.signXDR(txXdr, { network: opts.networkPassphrase });
-      }
-      if (id === LOBSTR_ID && window.lobstrSignerExtension) {
-        return window.lobstrSignerExtension.signTransaction(txXdr);
-      }
-      throw new Error(`${name} no está instalado`);
+    requestAccess: getAddress,
+    getAddress,
+    async signTransaction(txXdr) {
+      // Lobstr's API doesn't let an app choose the network or the signer
+      const { signTransaction } = await import("@lobstrco/signer-extension-api");
+      return signTransaction(txXdr);
     },
   };
 }
 
 // ── Albedo Module (web-based, always available) ─────────────
 function createAlbedoModule(): WalletModule {
+  const load = async () => {
+    const module = await import("@albedo-link/intent");
+    // Its CommonJS build nests the export depending on the bundler
+    const intent = module.default as unknown as { default?: typeof module.default };
+    return intent.default ?? module.default;
+  };
+  const getAddress = async () => {
+    const albedo = await load();
+    return (await albedo.publicKey({})).pubkey;
+  };
   return {
     id: ALBEDO_ID,
     name: "Albedo",
     icon: "🌅",
-    async isAvailable() {
-      return true; // Web-based, always available
-    },
-    async requestAccess() {
-      return this.getAddress();
-    },
-    async getAddress() {
-      const w = window.open("https://albedo.link/intent/public-key", "_blank", "width=500,height=600");
-      if (!w) throw new Error("Popup bloqueado por el navegador. Permite popups e intenta de nuevo.");
-      throw new Error("Albedo requiere interacción manual en albedo.link");
-    },
-    async signTransaction(_txXdr) {
-      throw new Error("Albedo signing no soportado en este entorno");
+    isAvailable: async () => true,
+    requestAccess: getAddress,
+    getAddress,
+    async signTransaction(txXdr, opts) {
+      const albedo = await load();
+      const { signed_envelope_xdr } = await albedo.tx({
+        xdr: txXdr,
+        pubkey: opts.address,
+        network: "testnet",
+      });
+      return signed_envelope_xdr;
     },
   };
 }
@@ -208,9 +216,9 @@ export class StellarWalletsKit {
 export function createDefaultModules(): WalletModule[] {
   return [
     createVarialModule(),
-    createGenericExtensionModule(XBULL_ID, "xBull", "🐂"),
+    createXBullModule(),
     createAlbedoModule(),
-    createGenericExtensionModule(LOBSTR_ID, "Lobstr", "🦞"),
+    createLobstrModule(),
   ];
 }
 

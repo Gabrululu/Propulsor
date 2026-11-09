@@ -14,6 +14,7 @@ import {
   SOROBAN_RPC_URL,
   NETWORK_PASSPHRASE,
   STELLAR_EXPLORER_BASE,
+  ZK_VERIFIER_CONTRACT_ID,
 } from "@/lib/stellar/client";
 
 // ── Types ─────────────────────────────────────────────────────────────────
@@ -33,9 +34,6 @@ type PageState =
 
 // ── Constants ──────────────────────────────────────────────────────────────
 
-const VERIFIER_CONTRACT_ID =
-  import.meta.env.VITE_ZK_VERIFIER_CONTRACT_ID ||
-  "CAGUCQUMNSOJALPFM3A2T2TBDIDCFUDY3UQA6JIWAN4ZP3COPQ7HP7BU";
 
 const HORIZON_TESTNET = "https://horizon-testnet.stellar.org";
 
@@ -88,16 +86,8 @@ const VerifyProof = () => {
 
     async function fetchRecord() {
       try {
-        if (VERIFIER_CONTRACT_ID === "TBD_AFTER_DEPLOY") {
-          setState({
-            status: "error",
-            message: "Contrato verificador no desplegado aún. Actualiza VITE_ZK_VERIFIER_CONTRACT_ID.",
-          });
-          return;
-        }
-
         const soroban  = new SorobanRpc.Server(SOROBAN_RPC_URL, { allowHttp: false });
-        const contract = new Contract(VERIFIER_CONTRACT_ID);
+        const contract = new Contract(ZK_VERIFIER_CONTRACT_ID);
 
         // Read-only simulation: call get_proof(nullifier)
         // Use a throwaway keypair — no signing needed for read-only

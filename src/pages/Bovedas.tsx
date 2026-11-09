@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { errorMessage } from "@/lib/utils";
 import DashboardLayout from "@/components/DashboardLayout";
 import VaultCard from "@/components/VaultCard";
+import YieldPanel from "@/components/YieldPanel";
 import { useWallet } from "@/lib/stellar/WalletContext";
 import { useContracts } from "@/hooks/useContracts";
 import { stroopsToUsdc, usdcToStroops, formatTimeRemaining } from "@/lib/stellar/contracts";
@@ -243,12 +244,17 @@ const Bovedas = () => {
                 canRelease={v.canRelease}
                 timeRemaining={v.timeRemaining}
                 colorVariant={v.colorVariant}
-                blendEnabled={v.vault_id === 2}
                 onLock={() => setLockModal({ vaultId: v.vault_id, name: v.name })}
                 onRelease={() => setReleaseModal({ vaultId: v.vault_id, name: v.name })}
                 onAdd={v.isLocked ? () => setAddModal({ vaultId: v.vault_id, name: v.name }) : undefined}
               />
             ))}
+          </div>
+        )}
+
+        {!loading && (
+          <div className="mt-8 max-w-xl">
+            <YieldPanel savingsBalance={vaults.find((v) => v.vault_id === 2)?.balance ?? 0} />
           </div>
         )}
       </div>

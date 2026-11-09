@@ -6,9 +6,8 @@ import { truncateAddress } from "@/lib/stellar";
 const FLOW_STEPS = [
   { icon: "💸", label: "Remesa" },
   { icon: "👁", label: "Vigilancia" },
-  { icon: "⚡", label: "Pago" },
+  { icon: "✅", label: "Verificación" },
   { icon: "📊", label: "Reparto" },
-  { icon: "💰", label: "Rendimiento" },
 ];
 
 function timeAgo(iso: string | null | undefined): string {
@@ -80,7 +79,7 @@ const AgentStatusCard = ({ authorized }: { authorized: boolean }) => {
 
       {/* ── Stats row (from agent_status) ────────────────────── */}
       {status && (
-        <div className="grid grid-cols-3 gap-3 mb-4">
+        <div className="grid grid-cols-2 gap-3 mb-4">
           <div className="bg-deep rounded-sm p-2.5 border border-pink-subtle">
             <span className="font-mono text-[0.55rem] text-body-muted uppercase tracking-wider block mb-0.5">Repartos</span>
             <span className="font-mono text-sm text-foreground font-bold">{status.total_splits}</span>
@@ -88,10 +87,6 @@ const AgentStatusCard = ({ authorized }: { authorized: boolean }) => {
           <div className="bg-deep rounded-sm p-2.5 border border-pink-subtle">
             <span className="font-mono text-[0.55rem] text-body-muted uppercase tracking-wider block mb-0.5">Último reparto</span>
             <span className="font-mono text-sm text-foreground">{timeAgo(status.last_split_at)}</span>
-          </div>
-          <div className="bg-deep rounded-sm p-2.5 border border-pink-subtle">
-            <span className="font-mono text-[0.55rem] text-mint uppercase tracking-wider block mb-0.5">Rendimiento generado</span>
-            <span className="font-mono text-sm text-mint font-bold">${Number(status.total_yield_usdc).toFixed(2)}</span>
           </div>
         </div>
       )}

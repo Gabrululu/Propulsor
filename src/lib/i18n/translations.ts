@@ -146,14 +146,14 @@ export const translations = {
     },
     privacy: {
       sectionLabel: "// SECCIÓN 05",
-      titlePart1: "TUS AHORROS SON ",
-      titlePart2: "TUYOS",
+      titlePart1: "TUS AHORROS, ",
+      titlePart2: "COMPROBABLES",
       subtitle:
-        "Con Propulsor puedes demostrar que tienes ahorros — sin decirle a nadie cuánto. Ni para pedir un crédito, ni para tranquilizar a tu familia, ni para nadie más que quiera saber.",
+        "Con Propulsor puedes demostrar que ahorras con un enlace que cualquiera puede comprobar, para pedir un crédito o dar tranquilidad a tu familia.",
       points: [
-        { icon: "🔒", title: "Nadie ve tu saldo", desc: "Ni bancos, ni familiares, ni Propulsor. Tu número se queda contigo." },
-        { icon: "✅", title: "Pero sí pueden confiar en ti", desc: "Generas un comprobante digital que demuestra que ahorras lo suficiente — sin mostrar cuánto." },
-        { icon: "🧮", title: "Imposible de falsificar", desc: "No es una promesa, es matemática. Se verifica solo, en la red, y nadie puede inventarlo." },
+        { icon: "✅", title: "Compartes un comprobante", desc: "El enlace muestra el monto mínimo que elegiste demostrar, no tu saldo exacto." },
+        { icon: "🧮", title: "Comprobado en la red", desc: "La red confirma que la prueba es tuya y que coincide con tus bóvedas reales." },
+        { icon: "🔎", title: "Tu saldo aún es público", desc: "Hoy las bóvedas se registran en una red pública: quien conozca tu cuenta puede consultarlas." },
       ],
     },
     manifesto: {
@@ -357,14 +357,14 @@ export const translations = {
     },
     privacy: {
       sectionLabel: "// SECTION 05",
-      titlePart1: "YOUR SAVINGS ARE ",
-      titlePart2: "YOURS",
+      titlePart1: "YOUR SAVINGS, ",
+      titlePart2: "PROVABLE",
       subtitle:
-        "With Propulsor you can prove you have savings — without telling anyone how much. Not for a loan, not to reassure your family, not for anyone else who wants to know.",
+        "With Propulsor you can prove you save with a link anyone can check, to apply for a loan or reassure your family.",
       points: [
-        { icon: "🔒", title: "No one sees your balance", desc: "Not banks, not family, not Propulsor. Your number stays with you." },
-        { icon: "✅", title: "But they can still trust you", desc: "You generate a digital proof that shows you save enough — without revealing how much." },
-        { icon: "🧮", title: "Impossible to fake", desc: "It's not a promise, it's math. It verifies itself on the network, and no one can fake it." },
+        { icon: "✅", title: "You share a receipt", desc: "The link shows the minimum amount you chose to prove, not your exact balance." },
+        { icon: "🧮", title: "Checked on the network", desc: "The network confirms the proof is yours and matches your real vaults." },
+        { icon: "🔎", title: "Your balance is still public", desc: "Vaults are recorded on a public network today: anyone who knows your account can look them up." },
       ],
     },
     manifesto: {

@@ -18,7 +18,7 @@ fn make_env() -> (Env, Address) {
 }
 
 fn register(env: &Env) -> SplitProtocolClient<'_> {
-    let id = env.register(SplitProtocol, ());
+    let id = env.register(SplitProtocol, (Address::generate(env),));
     SplitProtocolClient::new(env, &id)
 }
 
@@ -393,4 +393,20 @@ fn test_agent_splits_count_in_the_users_history() {
 
     assert_eq!(client.get_split_history(&user).get(0).unwrap().income, 1_000);
     assert_eq!(client.get_split_history(&agent).len(), 0);
+}
+
+// ---------------------------------------------------------------------------
+// Upgrades
+// ---------------------------------------------------------------------------
+
+#[test]
+fn test_upgrade_requires_the_admin() {
+    let env = Env::default();
+    let admin = Address::generate(&env);
+    let id = env.register(SplitProtocol, (admin.clone(),));
+    let client = SplitProtocolClient::new(&env, &id);
+    let unknown_wasm = BytesN::from_array(&env, &[0; 32]);
+
+    assert!(client.try_upgrade(&unknown_wasm).is_err());
+    assert!(env.auths().is_empty());
 }
