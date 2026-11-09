@@ -111,7 +111,9 @@ export type Database = {
           id: string
           name: string | null
           onboarding_complete: boolean | null
+          onboarding_draft: Json | null
           profile_type: Database["public"]["Enums"]["profile_type"] | null
+          split_contract_tx: string | null
           stellar_funded: boolean | null
           stellar_public_key: string | null
           stellar_secret_encrypted: string | null
@@ -122,7 +124,9 @@ export type Database = {
           id: string
           name?: string | null
           onboarding_complete?: boolean | null
+          onboarding_draft?: Json | null
           profile_type?: Database["public"]["Enums"]["profile_type"] | null
+          split_contract_tx?: string | null
           stellar_funded?: boolean | null
           stellar_public_key?: string | null
           stellar_secret_encrypted?: string | null
@@ -133,7 +137,9 @@ export type Database = {
           id?: string
           name?: string | null
           onboarding_complete?: boolean | null
+          onboarding_draft?: Json | null
           profile_type?: Database["public"]["Enums"]["profile_type"] | null
+          split_contract_tx?: string | null
           stellar_funded?: boolean | null
           stellar_public_key?: string | null
           stellar_secret_encrypted?: string | null
@@ -196,7 +202,15 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      complete_onboarding: {
+        Args: { p_hash: string; p_user_id: string }
+        Returns: undefined
+      }
       get_own_stellar_secret: { Args: never; Returns: string }
+      save_onboarding_draft: {
+        Args: { p_draft: Json; p_expected_hash?: string; p_user_id: string }
+        Returns: undefined
+      }
     }
     Enums: {
       profile_type: "jefa_hogar" | "emprendedora" | "trabajadora" | "freelancer"
