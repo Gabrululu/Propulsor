@@ -109,8 +109,6 @@ export type Database = {
         Row: {
           created_at: string | null
           id: string
-          split_contract_tx: string | null
-          onboarding_draft: Json | null
           name: string | null
           onboarding_complete: boolean | null
           profile_type: Database["public"]["Enums"]["profile_type"] | null
@@ -122,8 +120,6 @@ export type Database = {
         Insert: {
           created_at?: string | null
           id: string
-          split_contract_tx?: string | null
-          onboarding_draft?: Json | null
           name?: string | null
           onboarding_complete?: boolean | null
           profile_type?: Database["public"]["Enums"]["profile_type"] | null
@@ -135,8 +131,6 @@ export type Database = {
         Update: {
           created_at?: string | null
           id?: string
-          split_contract_tx?: string | null
-          onboarding_draft?: Json | null
           name?: string | null
           onboarding_complete?: boolean | null
           profile_type?: Database["public"]["Enums"]["profile_type"] | null
@@ -202,14 +196,6 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      save_onboarding_draft: {
-        Args: { p_user_id: string; p_draft: Json; p_expected_hash?: string | null }
-        Returns: undefined
-      }
-      complete_onboarding: {
-        Args: { p_user_id: string; p_hash: string }
-        Returns: undefined
-      }
       get_own_stellar_secret: { Args: never; Returns: string }
     }
     Enums: {
