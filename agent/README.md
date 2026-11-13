@@ -128,13 +128,19 @@ This registers the 60/30/10 split rules on-chain under the server's address.
    VITE_AGENT_SERVER_URL=https://propulsor-agent.railway.app
    ```
 
-### Step E — Deploy the monitor as a worker (required for auto-splits)
+### Step E — Run the monitor (required for auto-splits)
 
 The monitor is what actually detects deposits — without it, splits never run
-automatically. It's a **separate Railway service** from the payment server,
-and unlike the server it is not optional: it's what makes the whole
-"deposit → auto-split" flow work for every user, not just a single hardcoded
-account (see `.env.monitor.example` for the full rationale and variable list).
+automatically. It can run in two ways:
+
+**Inside the server (recommended, one Railway service).** Add to the server
+service: `RUN_MONITOR=true`, `SUPABASE_URL` and `AGENT_WEBHOOK_SECRET`. The
+server starts the monitor after it begins listening and the monitor calls it
+over loopback with the same `INTERNAL_API_KEY`. One Node process uses about
+110 MB, against about 250 MB for two. If the monitor's variables are missing,
+the server logs `Monitor not started` and keeps serving.
+
+**As a separate service:**
 
 1. In Railway → **Add Service → GitHub Repo** (same repo)
 2. Set Root Directory to `/agent`

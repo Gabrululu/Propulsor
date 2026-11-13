@@ -1,2 +1,2 @@
-web: pnpm start
+web: node dist/server.js
 worker: node dist/monitor.js

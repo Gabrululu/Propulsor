@@ -305,4 +305,15 @@ app.listen(Number(PORT), () => {
   console.log(`[propulsor-agent] Listening on http://localhost:${PORT}`);
   console.log('[propulsor-agent] POST /execute-split  — protected by x402 (0.01 USDC)');
   console.log('[propulsor-agent] GET  /health          — liveness check');
+
+  // RUN_MONITOR=true runs the payment monitor in this process instead of a
+  // separate service. It calls this server over loopback, with the same
+  // INTERNAL_API_KEY. If its config is missing, the server keeps serving.
+  if (process.env.RUN_MONITOR === 'true') {
+    import('./monitor.js')
+      .then(({ startMonitor }) => startMonitor({ agentServerUrl: `http://127.0.0.1:${PORT}` }))
+      .catch((err) => {
+        console.error(`[propulsor-agent] Monitor not started: ${err instanceof Error ? err.message : String(err)}`);
+      });
+  }
 });

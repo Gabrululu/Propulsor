@@ -5,7 +5,7 @@
     "buildCommand": "corepack enable && pnpm install --frozen-lockfile && pnpm run build"
   },
   "deploy": {
-    "startCommand": "pnpm start",
+    "startCommand": "node dist/server.js",
     "healthcheckPath": "/health",
     "healthcheckTimeout": 30,
     "restartPolicyType": "ON_FAILURE",

@@ -11,6 +11,10 @@
  * (via the agent-watchlist Edge Function) and refreshed on an interval, so
  * a newly onboarded user is picked up automatically without redeploying.
  *
+ * Runs on its own (`node dist/monitor.js`, or `pnpm run monitor`) or inside the
+ * agent server's process when RUN_MONITOR=true, which saves a second Railway
+ * service and its memory.
+ *
  * Usage:
  *   INTERNAL_API_KEY=... AGENT_SERVER_URL=... SUPABASE_URL=... AGENT_WEBHOOK_SECRET=... pnpm run monitor
  */
@@ -20,6 +24,7 @@ import { EventSource } from 'eventsource';
 (global as unknown as Record<string, unknown>).EventSource = EventSource;
 
 import 'dotenv/config';
+import { pathToFileURL } from 'node:url';
 import { Account, Address, BASE_FEE, Contract, Horizon, Networks, TransactionBuilder, rpc, scValToNative } from '@stellar/stellar-sdk';
 import { SPLIT_CONTRACT_ID } from './config.js';
 import { notifyAgentWebhook } from './supabase.js';
@@ -29,7 +34,8 @@ import { notifyAgentWebhook } from './supabase.js';
 // ---------------------------------------------------------------------------
 
 const HORIZON_URL = 'https://horizon-testnet.stellar.org';
-const AGENT_SERVER_URL = process.env.AGENT_SERVER_URL ?? 'http://localhost:3001';
+// Set by startMonitor: the server's own address when running inside it
+let AGENT_SERVER_URL = process.env.AGENT_SERVER_URL ?? 'http://localhost:3001';
 const USDC_CODE = 'USDC';
 const USDC_ISSUER = 'GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5';
 const RPC_URL = process.env.RPC_URL ?? 'https://soroban-testnet.stellar.org';
@@ -41,17 +47,17 @@ const INTERNAL_API_KEY = process.env.INTERNAL_API_KEY ?? '';
 const SUPABASE_URL = process.env.SUPABASE_URL ?? '';
 const AGENT_WEBHOOK_SECRET = process.env.AGENT_WEBHOOK_SECRET ?? '';
 
-if (!INTERNAL_API_KEY) {
-  console.error('[monitor] ERROR: INTERNAL_API_KEY is required, the same value as the agent server.');
-  process.exit(1);
-}
-if (!SUPABASE_URL || !AGENT_WEBHOOK_SECRET) {
-  console.error(
-    '[monitor] ERROR: SUPABASE_URL and AGENT_WEBHOOK_SECRET are required — the monitor has no ' +
-    'other way to know which accounts to watch (see agent-watchlist Edge Function) or to report ' +
-    'activity back to the dashboard.'
-  );
-  process.exit(1);
+function checkConfig() {
+  if (!INTERNAL_API_KEY) {
+    throw new Error('INTERNAL_API_KEY is required, the same value as the agent server.');
+  }
+  if (!SUPABASE_URL || !AGENT_WEBHOOK_SECRET) {
+    throw new Error(
+      'SUPABASE_URL and AGENT_WEBHOOK_SECRET are required — the monitor has no other way to ' +
+      'know which accounts to watch (see agent-watchlist Edge Function) or to report activity ' +
+      'back to the dashboard.'
+    );
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -181,6 +187,69 @@ function isUsdcPayment(payment: HorizonPayment): boolean {
   );
 }
 
+async function handlePayment(p: HorizonPayment) {
+  if (!isUsdcPayment(p)) return; // ignore non-USDC, outgoing, or unwatched accounts
+
+  logSection('USDC PAYMENT DETECTED');
+  log(`  From:    ${p.from}`);
+  log(`  To:      ${p.to}`);
+  log(`  Amount:  ${p.amount} USDC`);
+  log(`  TxHash:  ${p.transaction_hash}`);
+
+  // Convert USDC amount string (7 decimal places) to stroops without float precision loss
+  const [whole, frac = ''] = p.amount.split('.');
+  const incomeAmount = Number(
+    BigInt(whole) * 10_000_000n + BigInt(frac.padEnd(7, '0').slice(0, 7))
+  );
+
+  try {
+    if (!(await isServerAuthorizedBy(p.to))) {
+      log('  Recipient has not authorized the agent — skipping');
+      return;
+    }
+
+    logSection('Requesting split from the agent server');
+    const result = await requestSplit(p.to, p.id);
+
+    logSection('SPLIT EXECUTED SUCCESSFULLY');
+    log(`  Contract txHash:  ${result.txHash}`);
+    log('  Vault Breakdown:');
+    for (const vault of result.vaultBreakdown) {
+      const usdcAmount = (Number(vault.balance) / 10_000_000).toFixed(7);
+      log(`    Vault ${vault.vaultId}: ${vault.balance} stroops  (${usdcAmount} USDC)`);
+    }
+    // ── Notify agent-webhook so the dashboard status card updates ────
+    // watchedAccount is the actual recipient of this payment (p.to), not
+    // a fixed account — agent-webhook resolves it to the right user.
+    await notifyAgentWebhook({
+      watchedAccount: p.to,
+      eventType: 'split_executed',
+      amountUsdc: incomeAmount / 10_000_000,
+      txHash: result.txHash,
+      vaultBreakdown: Object.fromEntries(
+        result.vaultBreakdown.map((v) => [`vault_${v.vaultId}`, Number(v.balance) / 10_000_000]),
+      ),
+    });
+
+    log('');
+
+    // Yield is the user's choice: they deposit from their own account in the
+    // app (src/components/YieldPanel.tsx). The agent never moves those funds.
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    logSection('SPLIT FAILED');
+    log(`  Error: ${message}`);
+    log('  (Not retrying to avoid infinite loops)');
+    log('');
+
+    await notifyAgentWebhook({
+      watchedAccount: p.to,
+      eventType: 'agent_error',
+      errorMessage: message,
+    });
+  }
+}
+
 function startStream(): () => void {
   const server = new Horizon.Server(HORIZON_URL);
 
@@ -190,69 +259,12 @@ function startStream(): () => void {
     .payments()
     .cursor('now')
     .stream({
-      onmessage: async (payment: unknown) => {
-        const p = payment as HorizonPayment;
-
-        if (!isUsdcPayment(p)) return; // ignore non-USDC, outgoing, or unwatched accounts
-
-        logSection('USDC PAYMENT DETECTED');
-        log(`  From:    ${p.from}`);
-        log(`  To:      ${p.to}`);
-        log(`  Amount:  ${p.amount} USDC`);
-        log(`  TxHash:  ${p.transaction_hash}`);
-
-        // Convert USDC amount string (7 decimal places) to stroops without float precision loss
-        const [whole, frac = ''] = p.amount.split('.');
-        const incomeAmount = Number(
-          BigInt(whole) * 10_000_000n + BigInt(frac.padEnd(7, '0').slice(0, 7))
-        );
-
-        try {
-          if (!(await isServerAuthorizedBy(p.to))) {
-            log('  Recipient has not authorized the agent — skipping');
-            return;
-          }
-
-          logSection('Requesting split from the agent server');
-          const result = await requestSplit(p.to, p.id);
-
-          logSection('SPLIT EXECUTED SUCCESSFULLY');
-          log(`  Contract txHash:  ${result.txHash}`);
-          log('  Vault Breakdown:');
-          for (const vault of result.vaultBreakdown) {
-            const usdcAmount = (Number(vault.balance) / 10_000_000).toFixed(7);
-            log(`    Vault ${vault.vaultId}: ${vault.balance} stroops  (${usdcAmount} USDC)`);
-          }
-          // ── Notify agent-webhook so the dashboard status card updates ────
-          // watchedAccount is the actual recipient of this payment (p.to), not
-          // a fixed account — agent-webhook resolves it to the right user.
-          await notifyAgentWebhook({
-            watchedAccount: p.to,
-            eventType: 'split_executed',
-            amountUsdc: incomeAmount / 10_000_000,
-            txHash: result.txHash,
-            vaultBreakdown: Object.fromEntries(
-              result.vaultBreakdown.map((v) => [`vault_${v.vaultId}`, Number(v.balance) / 10_000_000]),
-            ),
-          });
-
-          log('');
-
-          // Yield is the user's choice: they deposit from their own account in the
-          // app (src/components/YieldPanel.tsx). The agent never moves those funds.
-        } catch (err) {
-          const message = err instanceof Error ? err.message : String(err);
-          logSection('SPLIT FAILED');
-          log(`  Error: ${message}`);
-          log('  (Not retrying to avoid infinite loops)');
-          log('');
-
-          await notifyAgentWebhook({
-            watchedAccount: p.to,
-            eventType: 'agent_error',
-            errorMessage: message,
-          });
-        }
+      // Errors must not escape: an unhandled rejection would stop the process,
+      // which is the agent server too when RUN_MONITOR=true.
+      onmessage: (payment: unknown) => {
+        handlePayment(payment as HorizonPayment).catch((err) => {
+          log(`[stream] Payment handling failed: ${err instanceof Error ? err.message : String(err)}`);
+        });
       },
 
       onerror: (err: unknown) => {
@@ -270,7 +282,18 @@ function startStream(): () => void {
 // Start
 // ---------------------------------------------------------------------------
 
-async function main() {
+let started = false;
+
+/**
+ * Starts watching payments. `agentServerUrl` overrides AGENT_SERVER_URL, so the
+ * server can point an embedded monitor at itself. Throws if config is missing.
+ */
+export async function startMonitor(options: { agentServerUrl?: string } = {}) {
+  if (started) return;
+  checkConfig();
+  started = true;
+  if (options.agentServerUrl) AGENT_SERVER_URL = options.agentServerUrl;
+
   logSection('PROPULSOR AUTONOMOUS AGENT — STARTING');
   log(`  Agent server:      ${AGENT_SERVER_URL}`);
   log(`  USDC issuer:       ${USDC_ISSUER.slice(0, 8)}...`);
@@ -287,10 +310,15 @@ async function main() {
   startStream();
 }
 
-void main();
+// Run as its own process (`node dist/monitor.js`)
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  startMonitor().catch((err) => {
+    console.error(`[monitor] ERROR: ${err instanceof Error ? err.message : String(err)}`);
+    process.exit(1);
+  });
 
-// Handle graceful shutdown
-process.on('SIGINT', () => {
-  log('[monitor] Shutting down...');
-  process.exit(0);
-});
+  process.on('SIGINT', () => {
+    log('[monitor] Shutting down...');
+    process.exit(0);
+  });
+}
