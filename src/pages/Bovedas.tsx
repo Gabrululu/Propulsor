@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { errorMessage } from "@/lib/utils";
 import DashboardLayout from "@/components/DashboardLayout";
 import VaultCard from "@/components/VaultCard";
@@ -7,6 +7,7 @@ import { useWallet } from "@/lib/stellar/WalletContext";
 import { useContracts } from "@/hooks/useContracts";
 import { stroopsToUsdc, usdcToStroops, formatTimeRemaining } from "@/lib/stellar/contracts";
 import { toast } from "@/hooks/use-toast";
+import { userError } from "@/lib/userErrors";
 
 const VAULT_META = [
   { name: "Hogar",        icon: "🏠", colorVariant: "pink"      as const },
@@ -38,6 +39,7 @@ const Bovedas = () => {
   const cachedVaults = lastVaults?.publicKey === publicKey ? lastVaults.vaults : null;
   const [vaults, setVaults] = useState<VaultData[]>(cachedVaults ?? []);
   const [loading, setLoading] = useState(!cachedVaults);
+  const [loadError, setLoadError] = useState("");
 
   // Release modal state
   const [releaseModal, setReleaseModal] = useState<{ vaultId: number; name: string } | null>(null);
@@ -62,14 +64,19 @@ const Bovedas = () => {
 
   const isCustodial = mode === "custodial";
 
+  const loading_ = useRef(false);
   const loadVaults = useCallback(async () => {
+    // A poll must not start while the previous one is still waiting on the network
+    if (loading_.current) return;
+    loading_.current = true;
     try {
-      const [bals, rules] = await Promise.all([
+      // One round trip for everything a vault card needs; only locked vaults
+      // need a second one to know whether they can be released.
+      const [bals, rules, locks] = await Promise.all([
         contracts.getBalances(),
         contracts.getRules(),
+        Promise.all(VAULT_META.map((_, i) => contracts.getLock(i))),
       ]);
-
-      const totalStroops = bals.reduce((s, b) => s + b.balance, 0n);
 
       const vaultList: VaultData[] = await Promise.all(
         VAULT_META.map(async (meta, i) => {
@@ -78,8 +85,7 @@ const Bovedas = () => {
           const balUsdc = balEntry ? stroopsToUsdc(balEntry.balance) : 0;
           const pct = ruleEntry?.percentage ?? 0;
 
-          const lock = await contracts.getLock(i);
-          // Only a locked vault has a release state worth reading
+          const lock = locks[i];
           const [canRelease, timeRemaining] = lock
             ? await Promise.all([contracts.checkRelease(i), contracts.getTimeRemaining(i)])
             : [false, 0];
@@ -109,10 +115,13 @@ const Bovedas = () => {
       );
 
       setVaults(vaultList);
+      setLoadError("");
       if (publicKey) lastVaults = { publicKey, vaults: vaultList };
     } catch (err) {
-      console.error("Error loading vault data:", err);
+      // Keep whatever is on screen; say so instead of showing empty vaults
+      setLoadError(userError(err));
     } finally {
+      loading_.current = false;
       setLoading(false);
     }
   }, [publicKey]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -222,6 +231,15 @@ const Bovedas = () => {
             </p>
           </div>
         </div>
+
+        {loadError && (
+          <div role="alert" className="mb-6 flex flex-wrap items-center gap-3 p-3 rounded-sm border border-destructive/30 bg-destructive/10">
+            <p className="text-xs text-destructive font-mono">{loadError}</p>
+            <button type="button" onClick={loadVaults} className="btn-outline-pink text-xs px-3 py-1.5 rounded-sm">
+              Reintentar
+            </button>
+          </div>
+        )}
 
         {loading ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">

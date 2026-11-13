@@ -106,7 +106,7 @@ const ZKProofPanel = () => {
     }
 
     try {
-      // 1. Fetch vault_2 balance from Soroban (stays in browser, never sent anywhere)
+      // 1. Fetch vault_2 balance from Soroban
       setState({ status: "fetching-balance" });
       const balances = await contracts.getBalances();
       const vault2 = balances.find(b => b.vault_id === 2);
@@ -192,7 +192,7 @@ const ZKProofPanel = () => {
       const message = err instanceof Error ? err.message : "Error desconocido";
       setState({
         status: "error",
-        message: /^(INCORRECT_PIN|WRONG_NETWORK|WALLET_KEY_UNAVAILABLE)$/.test(message) ? userError(err) : message,
+        message: /^(INCORRECT_PIN|WRONG_NETWORK|WALLET_KEY_UNAVAILABLE|RPC_UNAVAILABLE|SIGNATURE_EXPIRED)$/.test(message) ? userError(err) : message,
       });
     } finally {
       setPin("");

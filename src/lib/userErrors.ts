@@ -33,6 +33,11 @@ export function userError(error: unknown, language: Language = "es"): string {
       "We could not save your profile. Check your connection and try again.",
     ],
     [
+      /RPC_UNAVAILABLE/,
+      "La red de Stellar está tardando en responder. Vuelve a intentarlo en unos segundos.",
+      "The Stellar network is slow to respond. Try again in a few seconds.",
+    ],
+    [
       /SIGNATURE_EXPIRED/,
       "La aprobación tardó más de lo que la transacción es válida, así que no la enviamos. Vuelve a intentarlo y confírmala en tu wallet en menos de dos minutos.",
       "Approval took longer than the transaction is valid for, so we did not send it. Try again and confirm it in your wallet within two minutes.",

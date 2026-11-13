@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import * as S from "@stellar/stellar-sdk";
-import { setRules, getSetupTransactionStatus, executeSplit } from "./contracts";
+import { setRules, getSetupTransactionStatus, executeSplit, getBalances } from "./contracts";
 const mocks = vi.hoisted(() => ({
   server: {
     getAccount: vi.fn(),
@@ -149,5 +149,40 @@ describe("transaction journaling", () => {
     await expect(getSetupTransactionStatus("hash", 99)).resolves.toBe(
       "expired",
     );
+  });
+});
+
+describe("reads", () => {
+  it("retries a read that fails in transit once", async () => {
+    mocks.server.simulateTransaction
+      .mockRejectedValueOnce(new Error("timeout of 15000ms exceeded"))
+      .mockResolvedValueOnce({
+        result: {
+          retval: S.xdr.ScVal.scvVec([
+            S.xdr.ScVal.scvMap([
+              new S.xdr.ScMapEntry({ key: S.xdr.ScVal.scvSymbol("balance"), val: S.nativeToScVal(5n, { type: "i128" }) }),
+              new S.xdr.ScMapEntry({ key: S.xdr.ScVal.scvSymbol("vault_id"), val: S.nativeToScVal(2, { type: "u32" }) }),
+            ]),
+          ]),
+        },
+        latestLedger: 1,
+      });
+    await expect(getBalances(keypair.publicKey())).resolves.toEqual([
+      { balance: 5n, vault_id: 2 },
+    ]);
+    expect(mocks.server.simulateTransaction).toHaveBeenCalledTimes(2);
+  });
+
+  it("reports an unreachable network instead of empty vaults", async () => {
+    mocks.server.simulateTransaction.mockRejectedValue(new Error("timeout"));
+    await expect(getBalances(keypair.publicKey())).rejects.toThrow("RPC_UNAVAILABLE");
+  });
+
+  it("still returns no vaults for an account that has none", async () => {
+    mocks.server.simulateTransaction.mockResolvedValue({
+      result: { retval: S.nativeToScVal([]) },
+      latestLedger: 1,
+    });
+    await expect(getBalances(keypair.publicKey())).resolves.toEqual([]);
   });
 });

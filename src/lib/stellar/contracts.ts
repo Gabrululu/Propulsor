@@ -61,10 +61,17 @@ export interface LockResult {
 
 // ── Helpers ──────────────────────────────────────────────────
 
+// The public testnet RPC sometimes takes several seconds to answer, and
+// without a limit a stuck request would leave a page loading indefinitely.
+const RPC_TIMEOUT_MS = 15_000;
+
 let _rpcServer: S.rpc.Server | null = null;
 function rpcServer(): S.rpc.Server {
   if (!_rpcServer) {
-    _rpcServer = new S.rpc.Server(SOROBAN_RPC_URL, { allowHttp: false });
+    _rpcServer = new S.rpc.Server(SOROBAN_RPC_URL, {
+      allowHttp: false,
+      timeout: RPC_TIMEOUT_MS,
+    });
   }
   return _rpcServer;
 }
@@ -228,7 +235,11 @@ async function simulate(
       .setTimeout(30)
       .build();
 
-    const sim = await server.simulateTransaction(tx);
+    // A read that fails in transit (timeout, overloaded node) is worth one
+    // more try; a simulation error is the contract's answer and isn't.
+    const sim = await server
+      .simulateTransaction(tx)
+      .catch(() => server.simulateTransaction(tx));
     if (S.rpc.Api.isSimulationError(sim) || !sim.result) return null;
     return sim.result.retval;
   } catch {
@@ -327,7 +338,9 @@ export async function getBalances(publicKey: string): Promise<VaultBalance[]> {
     [addressVal(publicKey)],
     publicKey,
   );
-  if (!retval) return [];
+  // Showing an empty vault when the network didn't answer would look like
+  // the money was gone, so a failed read is an error, not zero.
+  if (!retval) throw new Error("RPC_UNAVAILABLE");
   try {
     const raw = S.scValToNative(retval) as Array<{
       balance: bigint;

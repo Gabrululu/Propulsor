@@ -103,9 +103,15 @@ const Dashboard = () => {
   }, [user?.id]);
 
   // ── Load balances + rules + locks from chain ─────────────
+  const balancesInFlight = useRef(false);
   const loadBalances = useCallback(async () => {
     if (!publicKey) { setBalancesLoading(false); return; }
+    // A poll must not start while the previous one is still waiting on the network
+    if (balancesInFlight.current) return;
+    balancesInFlight.current = true;
     try {
+      // Locks are read alongside balances instead of after them
+      const locksPromise = Promise.all([0, 1, 2].map((id) => contracts.getLock(id)));
       const [bals, chainRules] = await Promise.all([
         contracts.getBalances(),
         contracts.getRules(),
@@ -116,8 +122,8 @@ const Dashboard = () => {
 
       if (chainRules.length > 0) setRules(chainRules);
 
-      // Fetch lock states for each vault; only a locked vault can be released
-      const lockResults = await Promise.all([0, 1, 2].map((id) => contracts.getLock(id)));
+      // Only a locked vault can be released
+      const lockResults = await locksPromise;
       const releaseResults = await Promise.all(
         lockResults.map((lock, id) => (lock ? contracts.checkRelease(id) : false)),
       );
@@ -126,6 +132,7 @@ const Dashboard = () => {
     } catch {
       // Keep previous values on RPC failure
     } finally {
+      balancesInFlight.current = false;
       setBalancesLoading(false);
     }
   }, [publicKey]); // eslint-disable-line react-hooks/exhaustive-deps
