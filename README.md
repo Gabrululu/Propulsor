@@ -9,7 +9,7 @@
 
 Propulsor is a programmable financial management platform for the informal economy across Latin America. Using smart contracts on the **Stellar (Soroban)** network, every income is automatically split into protected vaults based on user-defined rules — no bank account required, no abusive fees, with real protection against external social and financial pressures.
 
-**The problem:** 70% of informal economy workers in Latin America lack access to formal financial products (IDB, 2024). Peru alone receives $800M+ in annual remittances — most reaches households with no formal savings tools and disappears within days. Not due to irresponsibility: due to lack of tools.
+**The problem:** 70% of informal economy workers in Latin America lack access to formal financial products (IDB, 2024). Peru alone receives $800M+ in annual remittances (World Bank, 2024) — most reaches households with no formal savings tools and disappears within days. Not due to irresponsibility: due to lack of tools.
 
 **The solution:** A smart contract that separates money before pressure arrives.
 

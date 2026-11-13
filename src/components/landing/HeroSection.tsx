@@ -91,17 +91,17 @@ const HeroSection = () => {
           </div>
 
           {/* Stats */}
-          <div className="md:col-span-6 grid grid-cols-3 gap-6">
-            <div>
-              <span className="font-mono text-2xl md:text-3xl font-bold text-pink">{t.hero.stat1Value}</span>
+          <div className="md:col-span-6 grid grid-cols-3 gap-3 sm:gap-6">
+            <div className="min-w-0">
+              <span className="font-mono text-base sm:text-2xl md:text-xl lg:text-2xl xl:text-3xl font-bold text-pink">{t.hero.stat1Value}</span>
               <p className="text-body-muted text-xs mt-1">{t.hero.stat1Label}</p>
             </div>
-            <div>
-              <span className="font-mono text-2xl md:text-3xl font-bold text-mint">$0.00001</span>
+            <div className="min-w-0">
+              <span className="font-mono text-base sm:text-2xl md:text-xl lg:text-2xl xl:text-3xl font-bold text-mint">$0.00001</span>
               <p className="text-body-muted text-xs mt-1">{t.hero.stat2Label}</p>
             </div>
-            <div>
-              <span className="font-mono text-2xl md:text-3xl font-bold text-pink">{t.hero.stat3Value}</span>
+            <div className="min-w-0">
+              <span className="font-mono text-base sm:text-2xl md:text-xl lg:text-2xl xl:text-3xl font-bold text-pink">{t.hero.stat3Value}</span>
               <p className="text-body-muted text-xs mt-1">{t.hero.stat3Label}</p>
             </div>
           </div>

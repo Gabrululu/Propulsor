@@ -27,9 +27,9 @@ The money you receive — automatically split and protected. No bank, no fees, n
 
 ## 1. The Problem
 
-- **70%** of informal workers in Latin America have no real control over their finances *(IDB, 2024)*
+- **70%** of informal workers in Latin America lack access to formal financial products *(IDB, 2024)*
 - **$800M+** is sent to Peru in remittances every year with no savings tools attached *(World Bank, 2024)*
-- **23%** of households in the informal economy have any kind of formal savings *(INEI, 2024)*
+- **23%** of informal-economy households in Peru have any kind of formal savings *(INEI, 2024)*
 
 The money arrives and disappears within days — not because of irresponsibility, but because no tool exists to protect it before social, family, or economic pressure gets to it first.
 
@@ -68,8 +68,8 @@ Propulsor receives your money, automatically splits it into vaults based on rule
 
 ## 5. Market
 
-- Base: **70% of Latin America's informal workforce** has no real control over their finances *(IDB, 2024)* — the addressable market is, in essence, the region's informal economy.
-- Entry point: Peru, where **$800M+ in annual remittances** arrive with no savings tool attached *(World Bank, 2024)*.
+- Base: **70% of Latin America's informal workforce** lacks access to formal financial products *(IDB, 2024)* — the addressable market is the region's informal economy.
+- First market: Peru, where **$800M+ in annual remittances** arrive with no savings tool attached *(World Bank, 2024)*. Then expansion across Latin America.
 - *Still to be refined with primary market research: TAM/SAM/SOM in dollars, expected penetration rate, and LATAM fintech adoption comparables (Nubank, Ualá) in their first 24 months.*
 
 ---
@@ -123,7 +123,7 @@ Propulsor receives your money, automatically splits it into vaults based on rule
 - **Distribution through remittances, not cold downloads:** the moment of highest intent is when the money arrives — partnering with whoever already sends the remittance (operators, gig platforms, employers) beats competing for generic attention.
 - **Community effect, not paid ads:** the product was born in a hackathon centered on women (She Ships 2026) — the first wave of users is also a natural referral network inside informal-work communities.
 - **Privacy as a trust hook, not a niche feature:** "prove you save without saying how much" is a message that explains itself and resolves a real anxiety (family, informal lenders) — it doesn't require the user to understand what zero-knowledge means.
-- **Ordered geographic expansion:** Peru first (where data and context are already validated), then markets with a comparable remittance and informal-economy profile across the region.
+- **Peru first, then LATAM:** launch in Peru, where the product was born and tested, then expand to countries with a comparable remittance and informal-economy profile. Each new country needs a licensed anchor to convert its local currency to and from USDC.
 
 ---
 
@@ -131,7 +131,7 @@ Propulsor receives your money, automatically splits it into vaults based on rule
 
 - **Short term:** move from testnet to mainnet; close a deal with a licensed SEP-24 anchor (currently using Stellar's reference anchor for testing only); first real users in Peru.
 - **Mid term:** activate layer 2 of the business model (shared yield) once real deposits exist in Blend; open commercial conversations with lenders/landlords for B2B2C verification.
-- **Long term:** expand to new LATAM markets; own conversion spread once a competitive licensed anchor is secured.
+- **Long term:** expand across LATAM, adding anchors for each country's local currency; own conversion spread once a competitive licensed anchor is secured.
 
 ---
 
@@ -145,9 +145,9 @@ Propulsor receives your money, automatically splits it into vaults based on rule
 
 ## Sources
 
-- 70% of informal workers with no real control over their finances — IDB, 2024
+- 70% of informal workers in Latin America without access to formal financial products — IDB, 2024
 - $800M+ in annual remittances to Peru with no savings tools — World Bank, 2024
-- 23% of informal-economy households with formal savings — INEI, 2024
+- 23% of informal-economy households in Peru with formal savings — INEI, 2024
 - Nubank Caixinhas (manual/centralized model) — [building.nubank.com](https://building.nubank.com/how-nubank-launched-caixinhas/)
 - Blend Protocol keeps 0% of generated interest — [defillama.com/protocol/blend](https://defillama.com/protocol/blend), [docs.blend.capital](https://docs.blend.capital/users/general-faq)
 - CAP-0074 (on-chain BN254 verification) in Protocol 25 — [stellar-protocol/cap-0074](https://github.com/stellar/stellar-protocol/blob/master/core/cap-0074.md)

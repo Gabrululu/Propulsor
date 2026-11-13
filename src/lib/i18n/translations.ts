@@ -16,7 +16,7 @@ export const translations = {
       description:
         "Separa, protege y ahorra tu dinero automáticamente con bóvedas inteligentes. Sin banco. Sin permiso. Solo tú.",
       stat1Value: "7 de 10",
-      stat1Label: "trabajadores informales en LATAM sin cuenta bancaria propia",
+      stat1Label: "trabajadores informales en LATAM sin acceso a productos financieros formales",
       stat2Label: "Fee por transacción en Stellar",
       stat3Value: "5s",
       stat3Label: "Para separar y proteger tu dinero",
@@ -31,7 +31,7 @@ export const translations = {
       "Bóvedas con bloqueo",
       "Depósitos instantáneos",
       "USDC",
-      "Soles → Dólares",
+      "Moneda local → Dólares",
       "Agente Autónomo",
       "Pagos automáticos",
       "Rendimiento con Blend",
@@ -44,7 +44,7 @@ export const translations = {
       cards: [
         {
           value: "70%",
-          label: "de trabajadores informales en Latinoamérica no tienen control real sobre sus finanzas",
+          label: "de trabajadores informales en Latinoamérica no tienen acceso a productos financieros formales",
           source: "BID, 2024",
         },
         {
@@ -54,7 +54,7 @@ export const translations = {
         },
         {
           value: "23%",
-          label: "de hogares en la economía informal tienen algún tipo de ahorro formal",
+          label: "de hogares en la economía informal en Perú tienen algún tipo de ahorro formal",
           source: "INEI, 2024",
         },
       ],
@@ -67,7 +67,7 @@ export const translations = {
         {
           title: "Recibe tu dinero",
           tag: "DEPÓSITO",
-          description: "Deposita soles. Un proveedor de pagos convierte tu dinero a USDC (dólares digitales) en Stellar automáticamente.",
+          description: "Deposita en tu moneda local. Un proveedor de pagos convierte tu dinero a USDC (dólares digitales) en Stellar automáticamente.",
         },
         {
           title: "Separa automáticamente",
@@ -98,7 +98,7 @@ export const translations = {
       ],
       terminalTitle: "propulsor :: separando tu dinero",
       terminalLines: [
-        "→ Recibido: 1000 soles",
+        "→ Recibido: 100 USDC",
         "→ Hogar: 60% ✓",
         "→ Fondo seguro: 30% ✓",
         "→ Meta grande: 10% ✓",
@@ -175,7 +175,7 @@ export const translations = {
       successBody: "Te avisaremos cuando Propulsor esté listo. Gracias por creer en la independencia financiera.",
       checklist: [
         "Bóvedas inteligentes con bloqueo por tiempo",
-        "Conversión automática soles → USDC",
+        "Conversión automática de tu moneda local → USDC",
         "Sin banco, sin permiso, sin intermediarios",
         "Tecnología segura y automática",
         "Diseñada para la economía informal",
@@ -227,7 +227,7 @@ export const translations = {
       description:
         "Automatically split, protect, and save your money with smart vaults on Stellar. No bank. No permission. Just you.",
       stat1Value: "7 in 10",
-      stat1Label: "informal workers in LATAM with no bank account of their own",
+      stat1Label: "informal workers in LATAM without access to formal financial products",
       stat2Label: "Fee per transaction on Stellar",
       stat3Value: "5s",
       stat3Label: "To split and protect your money",
@@ -242,7 +242,7 @@ export const translations = {
       "Time-locked vaults",
       "Instant deposits",
       "USDC",
-      "Soles → Dollars",
+      "Local currency → Dollars",
       "Autonomous Agent",
       "Automatic payments",
       "Yield with Blend",
@@ -255,7 +255,7 @@ export const translations = {
       cards: [
         {
           value: "70%",
-          label: "of informal workers in Latin America have no real control over their finances",
+          label: "of informal workers in Latin America lack access to formal financial products",
           source: "IDB, 2024",
         },
         {
@@ -265,7 +265,7 @@ export const translations = {
         },
         {
           value: "23%",
-          label: "of households in the informal economy have any kind of formal savings",
+          label: "of informal-economy households in Peru have any kind of formal savings",
           source: "INEI, 2024",
         },
       ],
@@ -278,7 +278,7 @@ export const translations = {
         {
           title: "Receive your money",
           tag: "DEPOSIT",
-          description: "Deposit soles. A payment provider automatically converts your money to USDC (digital dollars) on Stellar.",
+          description: "Deposit in your local currency. A payment provider automatically converts your money to USDC (digital dollars) on Stellar.",
         },
         {
           title: "Splits automatically",
@@ -309,7 +309,7 @@ export const translations = {
       ],
       terminalTitle: "propulsor :: splitting your money",
       terminalLines: [
-        "→ Received: 1000 soles",
+        "→ Received: 100 USDC",
         "→ Home: 60% ✓",
         "→ Safety net: 30% ✓",
         "→ Big goal: 10% ✓",
@@ -386,7 +386,7 @@ export const translations = {
       successBody: "We'll let you know when Propulsor is ready. Thanks for believing in financial independence.",
       checklist: [
         "Smart vaults with time-locking",
-        "Automatic soles → USDC conversion",
+        "Automatic local currency → USDC conversion",
         "No bank, no permission, no middlemen",
         "Secure, automatic technology",
         "Designed for the informal economy",
